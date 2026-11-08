@@ -1,0 +1,67 @@
+{
+  "title": "Why volunteers stay: mechanisms x volunteer life stages (fictional demo)",
+  "mode": "grid",
+  "_about": "Fictional demo. mode 'grid' scores filled / meaningful cells. Cells marked † were filled by the analogy gap fill in research/2026-11-founder-steps-down.md.",
+  "framework": {"name": "Volunteer life-stage model: recruit, onboard, sustain, hand over, leave (fictional demo framework)",
+                "citation": "Hollis (2019), Stages of Service, fictional demo citation"},
+  "mechanisms": [
+    {"code": "NEED", "name": "Visibly needed", "definition": "A role only this person holds, so their absence shows", "excludes": "Thanks and honors (REC)"},
+    {"code": "BEL", "name": "Belonging", "definition": "Care and presence that flow through the group", "excludes": "One-to-one development (GROW)"},
+    {"code": "GROW", "name": "Growth", "definition": "A ladder of skill or status, and someone who helps you climb it", "excludes": "Honors not tied to a ladder (REC)"},
+    {"code": "REC", "name": "Recognition", "definition": "Thanks and honors that cost the giver something", "excludes": "Ladder steps (GROW)"}
+  ],
+  "tie_breakers": ["Split bundles into their parts.", "Classify by the active ingredient: what stops working if you remove it?",
+                   "If two still fit, take the first in this order: NEED, GROW, REC, BEL."],
+  "situations": [
+    {"code": "S1", "name": "Recruiting a new volunteer", "group": "recruit"},
+    {"code": "S2", "name": "The first three months", "group": "onboard"},
+    {"code": "S3", "name": "Year two and after", "group": "sustain"},
+    {"code": "S4", "name": "A founder or long-time lead steps down", "group": "hand over"},
+    {"code": "S5", "name": "A volunteer leaves", "group": "leave"}
+  ],
+  "cells": [
+    {"situation": "S1", "mechanism": "NEED", "status": "filled", "practice": "Ask for one named job, not 'help'", "from": "Volunteer fire brigades", "evidence": "W"},
+    {"situation": "S1", "mechanism": "BEL", "status": "filled", "practice": "Bring-a-friend night", "from": "Amateur choirs", "evidence": "A"},
+    {"situation": "S1", "mechanism": "GROW", "status": "na"},
+    {"situation": "S1", "mechanism": "REC", "status": "na"},
+    {"situation": "S2", "mechanism": "NEED", "status": "filled", "practice": "First-week owned task with a name on it", "from": "Open-source projects", "evidence": "M"},
+    {"situation": "S2", "mechanism": "BEL", "status": "filled", "practice": "A named buddy for the first month", "from": "Volunteer fire brigades", "evidence": "M"},
+    {"situation": "S2", "mechanism": "GROW", "status": "filled", "practice": "Starter-to-member ladder with three steps", "from": "Community gardens", "evidence": "W"},
+    {"situation": "S2", "mechanism": "REC", "status": "dup", "dup_of": "S2\u00d7GROW"},
+    {"situation": "S3", "mechanism": "NEED", "status": "filled", "practice": "Rotating section lead", "from": "Amateur choirs", "evidence": "W"},
+    {"situation": "S3", "mechanism": "BEL", "status": "filled", "practice": "The tea break that is never skipped", "from": "Amateur choirs", "evidence": "A"},
+    {"situation": "S3", "mechanism": "GROW", "status": "filled", "practice": "Maintainer path: reviewer, then committer", "from": "Open-source projects", "evidence": "M"},
+    {"situation": "S3", "mechanism": "REC", "status": "filled", "practice": "Handwritten season-end note from the lead", "from": "Amateur sports clubs", "evidence": "W"},
+    {"situation": "S4", "mechanism": "NEED", "status": "filled", "practice": "Split the founder's role into three named roles before they go †", "from": "Company founder succession", "evidence": "W"},
+    {"situation": "S4", "mechanism": "BEL", "status": "empty", "priority": 2, "why": "No tested way to keep the founder's friends from leaving with them"},
+    {"situation": "S4", "mechanism": "GROW", "status": "filled", "practice": "Overlap year: successor runs it, founder advises †", "from": "Company founder succession", "evidence": "M"},
+    {"situation": "S4", "mechanism": "REC", "status": "empty", "priority": 3, "why": "Honoring a founder without making the successor look small"},
+    {"situation": "S5", "mechanism": "NEED", "status": "empty", "priority": 1, "why": "Nobody records what the leaver did, so the gap is invisible until it hurts"},
+    {"situation": "S5", "mechanism": "BEL", "status": "filled", "practice": "Alumni list and an open door", "from": "Open-source projects", "evidence": "A"},
+    {"situation": "S5", "mechanism": "GROW", "status": "na"},
+    {"situation": "S5", "mechanism": "REC", "status": "filled", "practice": "Exit thank-you naming specific work", "from": "Amateur sports clubs", "evidence": "W"}
+  ],
+  "min_practices_per_domain": 2,
+  "domains": [
+    {"name": "Amateur choirs", "required": true},
+    {"name": "Volunteer fire brigades", "required": true},
+    {"name": "Open-source projects", "required": true},
+    {"name": "Community gardens", "required": true},
+    {"name": "Amateur sports clubs", "required": true}
+  ],
+  "items": [
+    {"name": "Bring-a-friend night", "domain": "Amateur choirs", "mechanism": "BEL", "evidence": "A", "sources": ["CH1"]},
+    {"name": "Rotating section lead", "domain": "Amateur choirs", "mechanism": "NEED", "evidence": "W", "sources": ["CH1"]},
+    {"name": "The unskippable tea break", "domain": "Amateur choirs", "mechanism": "BEL", "evidence": "A", "sources": []},
+    {"name": "Ask for one named job", "domain": "Volunteer fire brigades", "mechanism": "NEED", "evidence": "W", "sources": ["FB1"]},
+    {"name": "First-month buddy", "domain": "Volunteer fire brigades", "mechanism": "BEL", "evidence": "M", "sources": ["FB1"]},
+    {"name": "First-week owned task", "domain": "Open-source projects", "mechanism": "NEED", "evidence": "M", "sources": ["OS1"]},
+    {"name": "Maintainer path", "domain": "Open-source projects", "mechanism": "GROW", "evidence": "M", "sources": ["OS1"]},
+    {"name": "Alumni list", "domain": "Open-source projects", "mechanism": "BEL", "evidence": "A", "sources": []},
+    {"name": "Starter-to-member ladder", "domain": "Community gardens", "mechanism": "GROW", "evidence": "W", "sources": ["CG1"]},
+    {"name": "Plot-mentor pairing", "domain": "Community gardens", "mechanism": "GROW", "evidence": "none", "sources": []},
+    {"name": "Season-end handwritten note", "domain": "Amateur sports clubs", "mechanism": "REC", "evidence": "W", "sources": ["SC1"]},
+    {"name": "Exit thank-you naming specific work", "domain": "Amateur sports clubs", "mechanism": "REC", "evidence": "W", "sources": ["SC1"]},
+    {"name": "First week owned task", "domain": "Community gardens", "mechanism": "NEED", "evidence": "W", "sources": ["CG1"]}
+  ]
+}

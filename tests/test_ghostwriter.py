@@ -58,6 +58,7 @@ class BookTestCase(unittest.TestCase):
         self.book = self.tmp / "book"
         code, _, _ = run_cli("init", str(self.book), "--title", "T", "--author", "A")
         self.assertEqual(code, 0)
+        self.set_phase("writing")   # most tests exercise drafting; phase gating has its own tests
         src = self.tmp / "data.md"
         src.write_text("Fictional data: the drill went out 96 times.\n")
         code, out, _ = run_cli("add-source", str(self.book), str(src), "--kind", "dataset", "--title", "Log")
@@ -66,6 +67,12 @@ class BookTestCase(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.tmp)
+
+    def set_phase(self, phase):
+        cfg_path = self.book / "ghostwriter.json"
+        cfg = json.loads(cfg_path.read_text())
+        cfg["phase"] = phase
+        cfg_path.write_text(json.dumps(cfg))
 
     def draft(self, text, name="d.md"):
         p = self.tmp / name
@@ -247,6 +254,484 @@ class TestDemoBook(unittest.TestCase):
                 self.assertIn("fictional", (s["title"] + s["origin"]).lower(), s["id"])
 
 
+DEMO_R = ROOT / "examples" / "demo-research"
+
+
+def grid(**over):
+    """A tiny coverage file: 2 mechanisms x 3 situations = 6 cells."""
+    d = {"title": "t", "mode": "grid",
+         "framework": {"name": "A stage model", "citation": "Someone (2000), fictional"},
+         "mechanisms": [{"code": "M1", "name": "one"}, {"code": "M2", "name": "two"}],
+         "situations": [{"code": "S1", "name": "a"}, {"code": "S2", "name": "b"}, {"code": "S3", "name": "c"}],
+         "cells": [{"situation": "S1", "mechanism": "M1", "status": "filled", "practice": "p", "evidence": "M"},
+                   {"situation": "S1", "mechanism": "M2", "status": "na"},
+                   {"situation": "S2", "mechanism": "M1", "status": "dup", "dup_of": "S1xM1"},
+                   {"situation": "S2", "mechanism": "M2", "status": "empty", "priority": 2, "why": "second"},
+                   {"situation": "S3", "mechanism": "M1", "status": "empty", "priority": 1, "why": "first"}],
+         "items": []}
+    d.update(over)
+    return d
+
+
+class TestPhaseGating(BookTestCase):
+    def test_new_book_starts_in_research(self):
+        book = self.tmp / "fresh"
+        run_cli("init", str(book))
+        cfg = json.loads((book / "ghostwriter.json").read_text())
+        self.assertEqual(cfg["phase"], "research")
+        self.assertTrue((book / "research" / "PLAN.md").exists())
+        self.assertTrue((book / "author-voice" / "README.md").exists())
+
+    def write_run(self):
+        d = self.book / "drafts" / "ch01"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "run-1.md").write_text(GOOD)
+
+    def test_drafting_commands_refuse_in_research_and_synthesis(self):
+        self.write_run()
+        for ph in ("research", "synthesis", "proposal"):
+            self.set_phase(ph)
+            code, _, err = run_cli("tournament", str(self.book), "ch01")
+            self.assertNotEqual(code, 0, ph)
+            self.assertIn(f"in the {ph} phase", err)
+            self.assertNotEqual(run_cli("promote", str(self.book), "ch01", "run-1")[0], 0, ph)
+        self.assertFalse((self.book / "chapters" / "ch01.md").exists())
+
+    def test_author_override_runs_and_is_logged(self):
+        self.write_run()
+        self.set_phase("research")
+        code, _, err = run_cli("tournament", str(self.book), "ch01", "--override-phase", "testing a sample chapter")
+        self.assertEqual(code, 0)
+        cfg = json.loads((self.book / "ghostwriter.json").read_text())
+        self.assertEqual(cfg["phase_overrides"][0]["why"], "testing a sample chapter")
+        self.assertEqual(cfg["phase_overrides"][0]["command"], "tournament")
+
+    def test_book_without_a_phase_counts_as_writing(self):
+        self.write_run()
+        cfg_path = self.book / "ghostwriter.json"
+        cfg = json.loads(cfg_path.read_text())
+        cfg.pop("phase")
+        cfg_path.write_text(json.dumps(cfg))
+        self.assertEqual(run_cli("tournament", str(self.book), "ch01")[0], 0)
+
+    def test_phase_require(self):
+        self.set_phase("research")
+        self.assertEqual(run_cli("phase", "require", str(self.book), "writing")[0], 1)
+        self.assertEqual(run_cli("phase", "require", str(self.book), "research")[0], 0)
+
+
+class ResearchBook(BookTestCase):
+    """A book in research with every CLI exit criterion met except the ones a test removes."""
+
+    def setUp(self):
+        super().setUp()
+        self.set_phase("research")
+        (self.book / "research" / "PLAN.md").write_text("# Plan\n\n## Exit criteria\n- [x] reader defined\n- [x] interview done\n")
+        run_cli("hypothesis", str(self.book), "--set", "Shared shelves beat garages.")
+        for i in range(5):
+            run_cli("voice-log", str(self.book), f"line {i} in my words")
+        (self.book / "research" / "coverage" / "g.json").write_text(json.dumps(grid()))
+
+    def cfg(self):
+        return json.loads((self.book / "ghostwriter.json").read_text())
+
+
+class TestPhaseAdvance(ResearchBook):
+    def test_refuses_with_unmet_criteria_then_advances(self):
+        # grid() is 2 filled of 5 meaningful = 40%, under the 75% default
+        code, _, err = run_cli("phase", "advance", str(self.book))
+        self.assertEqual(code, 1)
+        self.assertIn("coverage", err)
+        self.assertEqual(self.cfg()["phase"], "research")
+        (self.book / "research" / "coverage" / "g.json").write_text(json.dumps(grid(cells=grid()["cells"][:3])))
+        code, out, _ = run_cli("phase", "advance", str(self.book))   # 2 filled / 2 meaningful... + unassessed
+        self.assertEqual(code, 1, "unassessed cells are not filled")
+        full = grid()["cells"][:3] + [{"situation": s, "mechanism": m, "status": "filled", "evidence": "W"}
+                                      for s, m in (("S2", "M2"), ("S3", "M1"), ("S3", "M2"))]
+        (self.book / "research" / "coverage" / "g.json").write_text(json.dumps(grid(cells=full)))
+        code, out, _ = run_cli("phase", "advance", str(self.book))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.cfg()["phase"], "synthesis")
+        self.assertEqual(self.cfg()["phase_history"][-1]["from"], "research")
+
+    def test_unticked_plan_blocks(self):
+        (self.book / "research" / "coverage" / "g.json").write_text(json.dumps(grid(mode="breadth",
+            domains=[{"name": "D"}], items=[{"name": f"p{i}", "domain": "D", "mechanism": "M1", "evidence": "W"} for i in range(3)])))
+        (self.book / "research" / "PLAN.md").write_text("# Plan\n\n## Exit criteria\n- [x] a\n- [ ] b\n")
+        code, _, err = run_cli("phase", "advance", str(self.book))
+        self.assertEqual(code, 1)
+        self.assertIn("1/2 ticked", err)
+
+    def test_override_is_logged_with_unmet_criteria(self):
+        code, _, _ = run_cli("phase", "advance", str(self.book), "--override", "author wants to start synthesis")
+        self.assertEqual(code, 0)
+        h = self.cfg()["phase_history"][-1]
+        self.assertEqual(h["override"], "author wants to start synthesis")
+        self.assertTrue(any("coverage" in u for u in h["unmet"]))
+
+    def test_research_cannot_jump_to_writing_without_override(self):
+        self.assertEqual(run_cli("phase", "advance", str(self.book), "--to", "writing")[0], 1)
+
+    def test_going_back_needs_a_reason(self):
+        self.set_phase("writing")
+        self.assertNotEqual(run_cli("phase", "advance", str(self.book), "--to", "research")[0], 0)
+        self.assertEqual(run_cli("phase", "advance", str(self.book), "--to", "research", "--reason", "thesis pivot")[0], 0)
+        self.assertEqual(self.cfg()["phase"], "research")
+
+    def test_status_lists_every_criterion(self):
+        code, out, _ = run_cli("phase", "status", str(self.book))
+        self.assertEqual(code, 0)
+        self.assertIn("phase: research", out)
+        self.assertIn("[x] the author's own words logged", out)
+        self.assertIn("[ ] coverage at 75%+", out)
+        self.assertIn("drafting commands are off", out)
+
+
+class TestThesisPivots(BookTestCase):
+    def test_hypothesis_replacement_needs_a_reason_and_archives(self):
+        run_cli("hypothesis", str(self.book), "--set", "First idea.")
+        self.assertNotEqual(run_cli("hypothesis", str(self.book), "--set", "Second idea.")[0], 0)
+        self.assertEqual(run_cli("hypothesis", str(self.book), "--set", "Second idea.", "--reason", "author pivot")[0], 0)
+        cur = (self.book / "input" / "thesis" / "working-hypothesis.md").read_text()
+        self.assertIn("Second idea.", cur)
+        self.assertIn("not a pick", cur)
+        arch = list((self.book / "input" / "thesis" / "archive").glob("*-hypothesis.md"))
+        self.assertEqual(len(arch), 1)
+        self.assertIn("reason: author pivot", arch[0].read_text())
+        self.assertIn("First idea.", arch[0].read_text())
+
+    def test_supersede_archives_pick_and_options_with_reason(self):
+        (self.book / "thesis.md").write_text("# Thesis\n\n## The statement\nOld pick.\n")
+        (self.book / "input" / "thesis" / "options.md").write_text("Option A. Option B.\n")
+        self.assertEqual(run_cli("supersede", str(self.book), "--reason", "superseded by research")[0], 0)
+        self.assertIn("TODO", (self.book / "thesis.md").read_text())
+        self.assertFalse((self.book / "input" / "thesis" / "options.md").exists())
+        arch = sorted((self.book / "input" / "thesis" / "archive").glob("*.md"))
+        self.assertEqual(len(arch), 2)
+        self.assertTrue(all("reason: superseded by research" in a.read_text() for a in arch))
+        cfg = json.loads((self.book / "ghostwriter.json").read_text())
+        self.assertEqual(cfg["thesis_history"][0]["reason"], "superseded by research")
+
+    def test_supersede_with_nothing_fails(self):
+        self.assertNotEqual(run_cli("supersede", str(self.book), "--reason", "x")[0], 0)
+
+
+class TestCoverageScore(unittest.TestCase):
+    def test_score_excludes_na_counts_dups_and_unassessed(self):
+        r = gw.coverage_report(grid())
+        self.assertEqual(r["grid"]["cells"], 6)
+        self.assertEqual(r["grid"]["meaningful"], 5)       # 6 - 1 na
+        self.assertEqual(r["grid"]["filled"], 2)           # filled + dup
+        self.assertEqual(r["grid"]["unassessed"], 1)       # S3 x M2 never assessed: not filled
+        self.assertAlmostEqual(r["score"], 0.4)
+
+    def test_empty_cells_ranked_by_priority(self):
+        r = gw.coverage_report(grid())
+        self.assertEqual([x.split(":")[0] for x in r["ranked_empty"]], ["S3\u00d7M1", "S2\u00d7M2"])
+
+    def test_mece_each_item_exactly_one_known_mechanism(self):
+        r = gw.coverage_report(grid(items=[{"name": "a", "mechanism": ["M1", "M2"], "evidence": "W"},
+                                           {"name": "b", "mechanism": "M9", "evidence": "W"}]))
+        self.assertTrue(any("exactly one" in p for p in r["problems"]))
+        self.assertTrue(any("unknown mechanism M9" in p for p in r["problems"]))
+
+    def test_duplicates_and_no_evidence_flagged(self):
+        r = gw.coverage_report(grid(items=[{"name": "Buddy system", "domain": "X", "mechanism": "M1", "evidence": "W"},
+                                           {"name": "buddy-system", "domain": "Y", "mechanism": "M1", "evidence": "none"}]))
+        self.assertTrue(any("merge" in m for m in r["merges"]))
+        self.assertIn("buddy-system", r["no_evidence"])
+        self.assertEqual(r["mechanisms_without_items"], ["M2"])
+
+    def test_breadth_mode(self):
+        items = [{"name": f"p{i}", "domain": "Choirs", "mechanism": "M1", "evidence": "W"} for i in range(3)]
+        items.append({"name": "q", "domain": "Unions", "mechanism": "M1", "evidence": "W"})
+        r = gw.coverage_report(grid(mode="breadth", items=items,
+                                    domains=[{"name": "Choirs"}, {"name": "Unions"}, {"name": "Optional", "required": False}]))
+        self.assertEqual(r["mode"], "breadth")
+        self.assertAlmostEqual(r["score"], 0.5)            # Choirs has 3 evidenced; Unions 1 of 3
+        self.assertIn("Unions (1/3)", r["breadth"]["thin"])
+
+    def test_situations_need_a_framework(self):
+        r = gw.coverage_report(grid(framework={}))
+        self.assertTrue(any("framework" in p for p in r["problems"]))
+
+    def test_cli_writes_report(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            book = tmp / "b"
+            run_cli("init", str(book))
+            f = book / "research" / "coverage" / "g.json"
+            f.write_text(json.dumps(grid()))
+            code, out, _ = run_cli("coverage", str(book))
+            self.assertEqual(code, 0)
+            self.assertIn("40%", out)
+            rep = (book / "research" / "coverage" / "g.report.md").read_text()
+            self.assertIn("Empty cells, ranked", rep)
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_demo_grid(self):
+        data = json.loads(next((DEMO_R / "research" / "coverage").glob("*.json")).read_text())
+        r = gw.coverage_report(data)
+        self.assertEqual((r["grid"]["filled"], r["grid"]["meaningful"]), (14, 17))
+        self.assertEqual(r["problems"], [])
+
+
+class TestCitationStatus(BookTestCase):
+    def cbp_source(self):
+        code, out, _ = run_cli("add-source", str(self.book), "https://example.org/fictional", "--kind", "article",
+                               "--title", "Fictional study")
+        self.assertIn("confirm-before-print", out)
+        return out.split()[0]
+
+    def test_link_defaults_to_confirm_before_print_and_fails_a_chapter(self):
+        sid = self.cbp_source()
+        rep = gw.provenance_report(self.book, self.draft(f"Loans hit 96. [{sid}]\n"))
+        self.assertFalse(rep["pass"])
+        self.assertEqual(rep["confirm_before_print"], [sid])
+
+    def test_promote_refuses_confirm_before_print(self):
+        sid = self.cbp_source()
+        d = self.book / "drafts" / "ch01"
+        d.mkdir(parents=True)
+        (d / "run-1.md").write_text(GOOD.replace("[S001]", f"[{sid}]"))
+        code, _, err = run_cli("promote", str(self.book), "ch01", "run-1")
+        self.assertNotEqual(code, 0)
+        self.assertFalse((self.book / "chapters" / "ch01.md").exists())
+        run_cli("cite-status", str(self.book), sid, "--status", "verified", "--how", "fetched the source")
+        self.assertEqual(run_cli("promote", str(self.book), "ch01", "run-1")[0], 0)
+
+    def test_verified_needs_how_and_secondhand_needs_via(self):
+        sid = self.cbp_source()
+        self.assertNotEqual(run_cli("cite-status", str(self.book), sid, "--status", "verified")[0], 0)
+        self.assertNotEqual(run_cli("cite-status", str(self.book), sid, "--status", "secondhand")[0], 0)
+        self.assertEqual(run_cli("cite-status", str(self.book), sid, "--status", "secondhand", "--via", "S001")[0], 0)
+        rep = gw.provenance_report(self.book, self.draft(f"Loans hit 96. [{sid}]\n"))
+        self.assertTrue(rep["pass"], rep)
+        self.assertTrue(rep["warnings"])
+
+    def test_inline_cbp_marker_fails(self):
+        rep = gw.provenance_report(self.book, self.draft("Loans hit 96. [S001] [CBP: exact year]\n"))
+        self.assertFalse(rep["pass"])
+
+    def test_research_notes_may_hold_confirm_before_print(self):
+        note = self.book / "research" / "n.md"
+        note.write_text(ANALOGY.replace("verified | fetched", "confirm-before-print | "))
+        self.assertTrue(gw.research_report(note)["pass"], gw.research_report(note))
+        note.write_text(ANALOGY.replace("verified | fetched the source", "probably fine | "))
+        self.assertFalse(gw.research_report(note)["pass"])
+        note.write_text(ANALOGY.replace("| fetched the source |", "| |"))
+        self.assertFalse(gw.research_report(note)["pass"], "verified needs a how")
+
+    def test_ingest_research_keeps_status_and_is_idempotent(self):
+        note = self.book / "research" / "n.md"
+        note.write_text(ANALOGY)
+        code, out, _ = run_cli("ingest-research", str(self.book), "research/n.md")
+        self.assertEqual(code, 0, out)
+        idx = json.loads((self.book / "sources" / "index.json").read_text())["sources"]
+        new = [s for s in idx if s.get("from_research")]
+        self.assertEqual([s["status"] for s in new], ["confirm-before-print", "verified"])
+        self.assertEqual(new[1]["verified_how"], "fetched the source")
+        run_cli("ingest-research", str(self.book), "research/n.md")
+        self.assertEqual(len(json.loads((self.book / "sources" / "index.json").read_text())["sources"]), len(idx))
+
+
+ANALOGY = """---
+type: analogy
+analogy: "A founder leaving is like a CEO retiring."
+---
+
+## What the other world does
+- Succession plans. [M] (K1)
+
+## Translation
+- Name the founder's jobs before they go.
+
+## Where the analogy breaks
+A volunteer group cannot pay a successor, and the founder is often also the social center, so the
+friends who joined for them may leave with them. Nobody signed a contract, so planning a handover
+can feel like pushing someone out, and the overlap can turn into the founder never leaving at all.
+
+## Evidence strength
+- [W] reasoned borrowing.
+
+## Sources
+| key | citation | url | status | how |
+|---|---|---|---|---|
+| K0 | Someone (2020), fictional | | confirm-before-print | |
+| K1 | Other (2018), fictional | https://example.org/x | verified | fetched the source |
+"""
+
+
+class TestAuthorVoice(BookTestCase):
+    WORDS = "People don't quit the work. They quit the feeling that nobody would notice."
+
+    def setUp(self):
+        super().setUp()
+        code, out, _ = run_cli("voice-log", str(self.book), self.WORDS, "--kind", "belief", "--chapter", "ch01")
+        self.assertIn("V001", out)
+
+    def chapter(self, body_line, listed="V001"):
+        return GOOD.replace("claim:", f"author_voice: {listed}\nclaim:", 1).replace(
+            "I think that matters. [opinion]", body_line)
+
+    def test_log_is_verbatim_and_timestamped(self):
+        e = gw.load_voice_log(self.book)[0]
+        self.assertEqual(e["text"], self.WORDS)
+        self.assertEqual(e["kind"], "belief")
+        self.assertRegex(e["at"], r"^\d{4}-\d\d-\d\d \d\d:\d\d$")
+        self.assertIn(self.WORDS, (self.book / "author-voice" / "log.md").read_text())
+
+    def test_verbatim_passes_even_with_curly_quotes_and_emphasis(self):
+        d = self.draft(self.chapter("As the author put it: \u201c*People don\u2019t quit the work.* They quit the feeling "
+                                    "that nobody would notice.\u201d [V001]"))
+        rep = gw.author_voice_report(self.book, d)
+        self.assertTrue(rep["pass"], rep)
+        self.assertTrue(gw.gate_all(self.book, d)["pass"], gw.gate_all(self.book, d))
+
+    def test_paraphrase_fails(self):
+        d = self.draft(self.chapter("People leave when they feel nobody would notice them. [V001]"))
+        rep = gw.author_voice_report(self.book, d)
+        self.assertFalse(rep["pass"])
+        self.assertEqual(len(rep["paraphrased_or_missing"]), 1)
+
+    def test_chapter_tagged_entry_is_required_even_if_not_listed(self):
+        d = self.draft(GOOD)   # chapter: ch01, no author_voice listed
+        self.assertFalse(gw.author_voice_report(self.book, d)["pass"])
+
+    def test_unknown_voice_id_fails(self):
+        d = self.draft(self.chapter(self.WORDS + " [V001]", listed="V001, V009"))
+        self.assertEqual(gw.author_voice_report(self.book, d)["unknown_ids"], ["V009"])
+        self.assertFalse(gw.provenance_report(self.book, self.draft("Fine. [V009]\n"))["pass"])
+
+    def test_promote_refuses_paraphrase_and_tournament_counts_four_checks(self):
+        d = self.book / "drafts" / "ch01"
+        d.mkdir(parents=True)
+        (d / "run-1.md").write_text(self.chapter("People leave when nobody notices. [V001]"))
+        code, out, _ = run_cli("tournament", str(self.book), "ch01")
+        self.assertIn("eligible: none", out)
+        self.assertNotEqual(run_cli("promote", str(self.book), "ch01", "run-1")[0], 0)
+        (d / "run-1.md").write_text(self.chapter(self.WORDS + " [V001]"))
+        self.assertEqual(gw.gate_all(self.book, d / "run-1.md")["checks"], 4)
+        self.assertEqual(run_cli("promote", str(self.book), "ch01", "run-1")[0], 0)
+
+    def test_books_without_a_voice_log_keep_three_checks(self):
+        (self.book / "author-voice" / "log.jsonl").unlink()
+        self.assertEqual(gw.gate_all(self.book, self.draft(GOOD))["checks"], 3)
+
+
+THEORY = """---
+type: theory
+---
+
+## Propositions
+
+### P1 One
+- **Wrong if:** x.
+
+### P2 Two
+- **Wrong if:** y.
+
+## Decision rule: The Chair Test
+1. Would anyone notice?
+
+## Predictions
+| # | Prediction | Tests | How |
+|---|---|---|---|
+| 1 | By 2027 a | P1 | x |
+| 2 | By 2028 b | P1 | x |
+| 3 | By 2028 c | P2 | x |
+| 4 | By 2029 d | P2 | x |
+| 5 | By 2030 e | P1 | x |
+
+## Scoring
+These are judgment calls.
+
+## Where the evidence is thin
+1. a
+2. b
+"""
+
+
+class TestResearchNotes(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def rep(self, text):
+        p = self.tmp / "n.md"
+        p.write_text(text)
+        return gw.research_report(p)
+
+    def test_theory_passes(self):
+        self.assertTrue(self.rep(THEORY)["pass"], self.rep(THEORY))
+
+    def test_theory_needs_falsifiers_dated_predictions_rule_and_thin_section(self):
+        self.assertFalse(self.rep(THEORY.replace("- **Wrong if:** y.", "- trust me"))["pass"])
+        self.assertFalse(self.rep(THEORY.replace("| 5 | By 2030 e | P1 | x |\n", ""))["pass"])   # only 4
+        self.assertFalse(self.rep(THEORY.replace("By 2030 e", "Someday e"))["pass"])
+        self.assertFalse(self.rep(THEORY.replace("## Decision rule: The Chair Test", "## Rule"))["pass"])
+        self.assertFalse(self.rep(THEORY.replace("These are judgment calls.", "Scores below."))["pass"])
+        self.assertFalse(self.rep(THEORY.split("## Where the evidence is thin")[0])["pass"])
+
+    def test_analogy_must_say_where_it_breaks(self):
+        self.assertTrue(self.rep(ANALOGY)["pass"])
+        short = re.sub(r"(?s)## Where the analogy breaks\n.*?\n\n## Evidence", "## Where the analogy breaks\nIt mostly holds.\n\n## Evidence", ANALOGY)
+        self.assertFalse(self.rep(short)["pass"])
+        self.assertFalse(self.rep(ANALOGY.replace("- [W] reasoned borrowing.", "- fine."))["pass"])
+
+    def test_scorecard_statuses(self):
+        sc = ("---\ntype: scorecard\n---\n\n## Scorecard\n| Finding | Source | Status | Replication | Use |\n|---|---|---|---|---|\n"
+              "| A | x | HOLDS | replicated | supporting |\n| B | x | **MISREAD**: the popular version | resolved | foil |\n"
+              "| C | x | CONTESTED | mixed | foil |\n\n## Foils\n- B\n")
+        self.assertTrue(self.rep(sc)["pass"], self.rep(sc))
+        self.assertFalse(self.rep(sc.replace("| CONTESTED |", "| DEBUNKED |"))["pass"])
+        self.assertFalse(self.rep(sc.replace("| mixed |", "| |"))["pass"])
+
+    def test_borrow_scan_needs_every_part_per_domain(self):
+        dom = ("### {n}\n- **Mechanisms:** a\n- **Signature practices:** b\n- **Evidence:** [W]\n"
+               "- **Failure modes / dark side:** c\n- **Translation:** d\n\n")
+        note = "---\ntype: borrow-scan\n---\n\n## Domains\n\n" + dom.format(n="Choirs") + dom.format(n="Brigades")
+        self.assertTrue(self.rep(note)["pass"], self.rep(note))
+        self.assertFalse(self.rep(note.replace("- **Failure modes / dark side:** c\n", "", 1))["pass"])
+
+    def test_scaffolds_create_each_kind(self):
+        book = self.tmp / "b"
+        run_cli("init", str(book))
+        for kind in ("borrow", "analogy", "scorecard", "theory", "coverage"):
+            code, out, _ = run_cli("scaffold", str(book), kind, "--name", f"My {kind}")
+            self.assertEqual(code, 0, out)
+        self.assertEqual(len(list((book / "research").glob("*.md"))), 6)   # 4 notes + PLAN + README
+        json.loads(next((book / "research" / "coverage").glob("*.json")).read_text())
+
+    def test_demo_research_notes_pass(self):
+        notes = gw.research_notes(DEMO_R)
+        self.assertEqual(len(notes), 2)
+        for n in notes:
+            self.assertTrue(gw.research_report(n)["pass"], (n, gw.research_report(n)))
+
+
+class TestDemoResearch(unittest.TestCase):
+    def test_is_in_research_and_not_ready_to_leave(self):
+        cfg = json.loads((DEMO_R / "ghostwriter.json").read_text())
+        self.assertEqual(cfg["phase"], "research")
+        self.assertIn("fictional", cfg["author"].lower())
+        crit = gw.phase_criteria(DEMO_R, cfg, "research")
+        self.assertEqual([n for n, ok, _ in crit if not ok], ["research plan: every exit criterion ticked by the author"])
+
+    def test_every_source_is_fictional_and_has_a_status(self):
+        for s in json.loads((DEMO_R / "sources" / "index.json").read_text())["sources"]:
+            self.assertIn("fictional", s["title"].lower(), s["id"])
+            self.assertIn(s["status"], gw.CITE_STATUSES)
+
+    def test_hypothesis_pivot_is_archived_with_reason(self):
+        arch = list((DEMO_R / "input" / "thesis" / "archive").glob("*-hypothesis.md"))
+        self.assertEqual(len(arch), 1)
+        self.assertIn("reason:", arch[0].read_text())
+
+
 class TTY(io.StringIO):
     def isatty(self):
         return True
@@ -401,6 +886,36 @@ class TestValueEstimate(FundTestCase):
             self.assertEqual(self.cli("promote", str(self.book), "ch02", "run-1")[0], 0)
         one = gw.ai_tell_report(self.book / "chapters" / "ch01.md")["words"]
         self.assertEqual(seen, {"full-draft": 2 * one})
+
+
+class TestResearchReadyMoment(FundTestCase):
+    """Leaving research with every criterion met is a value moment; an override is not."""
+
+    def research_book(self, cover_full=True):
+        self.set_phase("research")
+        (self.book / "research" / "PLAN.md").write_text("# Plan\n\n## Exit criteria\n- [x] done\n")
+        run_cli("hypothesis", str(self.book), "--set", "A hypothesis.")
+        for i in range(5):
+            run_cli("voice-log", str(self.book), f"words {i}")
+        cells = [{"situation": "S1", "mechanism": "M1", "status": "filled" if cover_full else "empty", "evidence": "W"}]
+        (self.book / "research" / "coverage" / "g.json").write_text(json.dumps(
+            {"framework": {"name": "f"}, "mechanisms": [{"code": "M1"}], "situations": [{"code": "S1"}], "cells": cells}))
+
+    def test_clean_advance_is_a_value_moment_with_no_hours_claim(self):
+        self.status_file.write_text((ROOT / "FUNDING-STATUS.json").read_text())
+        self.research_book()
+        code, out = self.cli("phase", "advance", str(self.book))
+        self.assertEqual(code, 0)
+        self.assertIn("Research phase complete: all 5 exit criteria met ✓. Ghost Writer is free;", out)
+        self.assertNotIn("That's about", out)
+
+    def test_override_advance_is_not_a_value_moment(self):
+        self.status_file.write_text((ROOT / "FUNDING-STATUS.json").read_text())
+        self.research_book(cover_full=False)
+        code, out = self.cli("phase", "advance", str(self.book), "--override", "moving on")
+        self.assertEqual(code, 0)
+        self.assertNotIn("Ghost Writer is free", out)
+        self.assertEqual(self.state(), {})
 
 
 class TestFundSilence(FundTestCase):

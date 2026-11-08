@@ -6,7 +6,9 @@
       "title": "Member survey, 40 respondents (fictional)",
       "origin": "Elm Street Tool Library (fictional)",
       "date": "2026-04-01",
-      "file": "sources/S001.md"
+      "file": "sources/S001.md",
+      "status": "verified",
+      "verified_how": "copy in workspace (fictional)"
     },
     {
       "id": "S002",
@@ -14,7 +16,9 @@
       "title": "Lending log, year one (fictional)",
       "origin": "Elm Street Tool Library (fictional)",
       "date": "2026-03-15",
-      "file": "sources/S002.md"
+      "file": "sources/S002.md",
+      "status": "verified",
+      "verified_how": "copy in workspace (fictional)"
     },
     {
       "id": "S003",
@@ -22,7 +26,9 @@
       "title": "The ladder I bought twice (fictional author's post)",
       "origin": "author's blog (fictional)",
       "date": "2025-10-02",
-      "file": "sources/S003.md"
+      "file": "sources/S003.md",
+      "status": "verified",
+      "verified_how": "copy in workspace (fictional)"
     },
     {
       "id": "S004",
@@ -30,7 +36,9 @@
       "title": "Interview answer to Q001",
       "origin": "author interview",
       "date": "2026-11-08",
-      "file": "sources/S004.md"
+      "file": "sources/S004.md",
+      "status": "verified",
+      "verified_how": "the author, first person"
     },
     {
       "id": "S005",
@@ -38,7 +46,9 @@
       "title": "Interview answer to Q002",
       "origin": "author interview",
       "date": "2026-11-08",
-      "file": "sources/S005.md"
+      "file": "sources/S005.md",
+      "status": "verified",
+      "verified_how": "the author, first person"
     }
   ]
 }

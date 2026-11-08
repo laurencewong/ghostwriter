@@ -1,0 +1,68 @@
+{
+  "sources": [
+    {
+      "id": "S001",
+      "kind": "article",
+      "title": "Okafor (2021), Handing It On: Founder Exits in Small Firms, fictional case series",
+      "origin": "2026-11-founder-steps-down.md",
+      "date": "2026-11-08",
+      "file": "sources/S001.md",
+      "status": "confirm-before-print",
+      "from_research": "research/2026-11-founder-steps-down.md#FS1"
+    },
+    {
+      "id": "S002",
+      "kind": "article",
+      "title": "Lindqvist & Rao (2018), The Overlap Year, fictional journal article",
+      "origin": "https://example.org/fictional/overlap-year",
+      "date": "2026-11-08",
+      "file": "sources/S002.md",
+      "status": "verified",
+      "verified_how": "fetched the source (fictional demo)",
+      "from_research": "research/2026-11-founder-steps-down.md#FS2"
+    },
+    {
+      "id": "S003",
+      "kind": "article",
+      "title": "Mbeki (2022), First Commits and Who Stays, fictional study",
+      "origin": "https://example.org/fictional/first-commits",
+      "date": "2026-11-08",
+      "file": "sources/S003.md",
+      "status": "verified",
+      "verified_how": "fetched the source (fictional demo)",
+      "from_research": "research/2026-11-why-volunteers-stay-theory.md#OS1"
+    },
+    {
+      "id": "S004",
+      "kind": "article",
+      "title": "Hart (2020), The Named Job, fictional survey of rural brigades",
+      "origin": "2026-11-why-volunteers-stay-theory.md",
+      "date": "2026-11-08",
+      "file": "sources/S004.md",
+      "status": "secondhand",
+      "from_research": "research/2026-11-why-volunteers-stay-theory.md#FB1",
+      "via": "cited in Hollis (2019), fictional"
+    },
+    {
+      "id": "S005",
+      "kind": "article",
+      "title": "Duarte (2023), Notes from the Coach, fictional",
+      "origin": "2026-11-why-volunteers-stay-theory.md",
+      "date": "2026-11-08",
+      "file": "sources/S005.md",
+      "status": "confirm-before-print",
+      "from_research": "research/2026-11-why-volunteers-stay-theory.md#SC1"
+    },
+    {
+      "id": "S006",
+      "kind": "article",
+      "title": "Greenway Trust (2021), Starter Plots, fictional report",
+      "origin": "https://example.org/fictional/starter-plots",
+      "date": "2026-11-08",
+      "file": "sources/S006.md",
+      "status": "verified",
+      "verified_how": "fetched the source (fictional demo)",
+      "from_research": "research/2026-11-why-volunteers-stay-theory.md#CG1"
+    }
+  ]
+}
