@@ -3,11 +3,11 @@
 Deterministic gates first (this table). Only drafts that pass every gate are eligible.
 Then judge the eligible drafts head to head with prompts/07-tournament.md and record the verdict below.
 
-| run | words | claims cited/total | unsupported | AI tells (hard/soft per 1k) | thesis | all gates |
-|---|---|---|---|---|---|---|
-| run-1 | 340 | 4/4 | 0 | 0/0.0 | ok | PASS |
-| run-2 | 146 | 2/5 | 3 | 0/0.0 | ok | fail |
-| run-3 | 147 | 4/4 | 0 | 0/0.0 | ok | PASS |
+| run | words | claims cited/total | unsupported | confirm-before-print | AI tells (hard/soft per 1k) | thesis | author's words | all gates |
+|---|---|---|---|---|---|---|---|---|
+| run-1 | 340 | 4/4 | 0 | 0 | 0/0.0 | ok | n/a | PASS |
+| run-2 | 146 | 2/5 | 3 | 0 | 0/0.0 | ok | n/a | fail |
+| run-3 | 147 | 4/4 | 0 | 0 | 0/0.0 | ok | n/a | PASS |
 
 Eligible: run-1, run-3
 

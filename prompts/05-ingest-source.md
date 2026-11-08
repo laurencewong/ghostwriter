@@ -4,6 +4,12 @@ Every fact in the book traces to a registered source. Register with:
 
     python3 scripts/ghostwriter.py add-source <book> <file-or-url> --kind post|note|dataset|article|interview|book|talk --title "..." --date YYYY-MM-DD
 
+Every source carries a citation status (`prompts/R7-citation-honesty.md`). A link defaults to
+`confirm-before-print`; a file in hand defaults to `verified`. Set it explicitly with
+`--status verified --how "fetched the source"`, `--status secondhand --via "the source that cites it"`,
+and update it later with `cite-status`. Research notes are registered in bulk with
+`ingest-research <book> research/<note>.md`.
+
 Use `--pointer` when the content must stay where it is (private files, big datasets): the
 registry records the path, not a copy.
 

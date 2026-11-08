@@ -1,0 +1,30 @@
+{
+  "title": "Why They Stay (working title)",
+  "author": "Theo Brandt (fictional)",
+  "thesis_file": "thesis.md",
+  "drafts_per_chapter": 3,
+  "voice": {
+    "samples": [
+      {
+        "path": "voice/samples/*.md",
+        "owner": "self",
+        "weight": 1.0,
+        "note": "the author's own published writing"
+      }
+    ]
+  },
+  "phase": "research",
+  "research": {
+    "coverage_threshold": 0.75,
+    "require_coverage": true,
+    "min_voice_entries": 5,
+    "_about": "Research exit criteria the CLI checks (`phase status`). The author adds their own criteria as a checklist in research/PLAN.md. Set require_coverage to false if the book needs no coverage grid."
+  },
+  "created": "2026-11-08",
+  "phase_history": [
+    {
+      "to": "research",
+      "at": "2026-11-08 13:18"
+    }
+  ]
+}

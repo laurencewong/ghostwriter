@@ -1,0 +1,23 @@
+{
+  "title": "{{title}}",
+  "mode": "grid",
+  "_about": "mode 'grid' scores filled / meaningful cells; mode 'breadth' scores required domains with min_practices_per_domain evidenced items. Cell status: filled | dup (with dup_of) | empty (add priority 1..n and why) | na. Every item maps to exactly one mechanism. Evidence grades: S, M, W, A, C, or none.",
+  "framework": {"name": "TODO the established framework the situation list is grounded in", "citation": "TODO"},
+  "mechanisms": [
+    {"code": "AAA", "name": "TODO", "definition": "TODO", "excludes": "TODO (goes to ...)"}
+  ],
+  "tie_breakers": ["Split bundles into their parts.", "Classify by the active ingredient: what stops working if you remove it?"],
+  "situations": [
+    {"code": "A1", "name": "TODO", "group": "TODO"}
+  ],
+  "cells": [
+    {"situation": "A1", "mechanism": "AAA", "status": "empty", "priority": 1, "why": "TODO"}
+  ],
+  "min_practices_per_domain": 3,
+  "domains": [
+    {"name": "TODO a major kind of group or field", "required": true}
+  ],
+  "items": [
+    {"name": "TODO a named practice", "domain": "TODO", "mechanism": "AAA", "evidence": "none", "sources": []}
+  ]
+}

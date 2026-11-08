@@ -9,6 +9,12 @@
   "updated": "2026-11-08",
   "value_moments": [
     {
+      "id": "research-ready",
+      "surface": "cli",
+      "when": "the book leaves the research phase with every exit criterion met (`phase advance` research -> synthesis, no override)",
+      "why": "A finished research phase (the author's own exit criteria ticked, coverage at the threshold, every citation with an honest status) is the first thing the author holds that they could not get from a chatbot: a defensible research base for the book."
+    },
+    {
       "id": "chapter-passed",
       "surface": "cli",
       "when": "the first time a chapter draft passes all 3 checks (tournament or promote)",
@@ -20,5 +26,34 @@
       "when": "every chapter in the spine has been promoted",
       "why": "A complete, gate-passing draft of the whole book is the full payoff the author came for."
     }
-  ]
+  ],
+  "value_estimates": {
+    "_about": "Assumptions behind the 'hours of drafting you didn't do' line. It is an ESTIMATE, always labeled as one, and deliberately low. `ghostwriter.py fund` prints this math. Edit the numbers here, not in code.",
+    "label": "estimate",
+    "unit": "hours of drafting",
+    "formula": "words in the passing chapter / baseline_words_per_hour x claim_share, rounded down; full draft = the same on all promoted chapters' words; under 10 minutes = no value claim",
+    "baseline_words_per_hour": 1140,
+    "claim_share": 0.5,
+    "per_moment": {
+      "chapter-passed": "words in the passing chapter (the shortest passing run, at a tournament)",
+      "full-draft": "sum of words in every promoted chapter in the spine",
+      "research-ready": "no hours claim: there is no published benchmark for research time we would trust, so the line names the outcome only"
+    },
+    "benchmarks": [
+      {
+        "claim": "Composing text at a keyboard averaged 19.0 words per minute (about 1,140 words per hour); transcribing averaged 32.5.",
+        "source": "Karat, Halverson, Horn & Karat (1999), 'Patterns of entry and correction in large vocabulary continuous speech recognition systems', CHI '99.",
+        "url": "https://doi.org/10.1145/302979.303160",
+        "checked": "citation confirmed (24 users, speech vs keyboard, transcription and composition tasks); the 19.0/32.5 wpm figures via Wikipedia 'Words per minute', which cites this paper",
+        "secondary_url": "https://en.wikipedia.org/wiki/Words_per_minute"
+      }
+    ],
+    "why_conservative": [
+      "the benchmark is raw composing speed in a short lab session, faster than real book drafting: a sourced chapter also needs research, structure and revision, which it leaves out",
+      "only half of the hours that fast pace implies are claimed",
+      "hours are rounded down, and the shortest passing draft is used",
+      "the research-ready moment makes no time claim at all"
+    ],
+    "task": "drafting"
+  }
 }
