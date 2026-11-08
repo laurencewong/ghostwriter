@@ -36,13 +36,16 @@
       {
         "claim": "Composing text at a keyboard averaged 19.0 words per minute (about 1,140 words per hour); transcribing averaged 32.5.",
         "source": "Karat, Halverson, Horn & Karat (1999), 'Patterns of entry and correction in large vocabulary continuous speech recognition systems', CHI '99.",
-        "url": "https://doi.org/10.1145/302979.303160"
+        "url": "https://doi.org/10.1145/302979.303160",
+        "checked": "citation confirmed (24 users, speech vs keyboard, transcription and composition tasks); the 19.0/32.5 wpm figures via Wikipedia 'Words per minute', which cites this paper",
+        "secondary_url": "https://en.wikipedia.org/wiki/Words_per_minute"
       }
     ],
     "why_conservative": [
       "the benchmark is raw composing speed in a short lab session, faster than real book drafting: a sourced chapter also needs research, structure and revision, which it leaves out",
       "only half of the hours that fast pace implies are claimed",
       "hours are rounded down, and the shortest passing draft is used"
-    ]
+    ],
+    "task": "drafting"
   }
 }
