@@ -1,0 +1,8 @@
+{
+  "standard": "Shared-repo standard",
+  "version": "1.1.0",
+  "tool": "repo-evals",
+  "graded_at": "2026-11-08",
+  "score_before_fix": 96.6,
+  "auto_fixed": []
+}
