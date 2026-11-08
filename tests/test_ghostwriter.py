@@ -276,10 +276,10 @@ class FundTestCase(BookTestCase):
         self.fsf.stop()
         self.env.stop()
 
-    def moment(self, key, now=T0, moment="chapter-passed", tty=True, a=None):
+    def moment(self, key, now=T0, moment="chapter-passed", tty=True, a=None, words=None):
         out = TTY() if tty else io.StringIO()
         with contextlib.redirect_stdout(out):
-            line = gw.fund_milestone(moment, key, "Chapter 3 passed all 3 checks ✓.", a, now=now)
+            line = gw.fund_milestone(moment, key, "Chapter 3 passed all 3 checks ✓.", a, now=now, words=words)
         return line, out.getvalue()
 
     def cli(self, *args):
@@ -296,8 +296,8 @@ class FundTestCase(BookTestCase):
 class TestFundCap(FundTestCase):
     def test_first_moment_asks_with_the_exact_line(self):
         line, out = self.moment("ch03")
-        self.assertEqual(line, "Chapter 3 passed all 3 checks ✓. Ghost Writer is free; building it has cost "
-                               "~$412 in AI so far, $37 covered. Chip in $3: https://github.com/sponsors/laurencewong")
+        self.assertEqual(line, "Chapter 3 passed all 3 checks ✓. Ghost Writer is free; building it cost "
+                               "~$412 in AI, $37 covered. Chip in $3: https://github.com/sponsors/laurencewong")
         self.assertIn(line, out)
         self.assertEqual(gw.fund_state_path(), self.tmp / "xdg" / "ghostwriter" / "fund.json")
 
@@ -339,6 +339,68 @@ class TestFundCap(FundTestCase):
         self.assertNotIn("sponsors", out)                          # counted, but capped: 1 since the last ask
         self.assertIn("full-draft:", " ".join(self.state()["seen"]))
         self.assertEqual(self.state()["moments"], 2)
+
+
+class TestValueEstimate(FundTestCase):
+    """The line leads with the value, as a labeled, deliberately low estimate."""
+
+    def test_line_leads_with_value_then_free_then_cost_then_ask(self):
+        line, _ = self.moment("ch03", words=6840)     # 6840 / 1140 = 6 h naive, 50% claimed = 3 h
+        self.assertEqual(line, "Chapter 3 passed all 3 checks ✓. That's about 3 hours of drafting you didn't do "
+                               "(estimate: `ghostwriter.py fund`). Ghost Writer is free; building it cost ~$412 "
+                               "in AI, $37 covered. Chip in $3: https://github.com/sponsors/laurencewong")
+        self.assertEqual(line.count("\n"), 0)
+
+    def test_claims_at_most_half_and_rounds_down(self):
+        est = gw.value_estimate(4000, STATUS)
+        self.assertAlmostEqual(est["claimed_hours"], 4000 / 1140 / 2)
+        self.assertEqual(gw.hours_phrase(est["claimed_hours"]), "about 1.5 hours")   # 1.75 -> 1.5
+        greedy = dict(STATUS, value_estimates={"baseline_words_per_hour": 1140, "claim_share": 0.9})
+        self.assertEqual(gw.value_estimate(4000, greedy)["claim_share"], 0.5)        # capped at half
+        self.assertEqual(gw.hours_phrase(0.99), "about 50 minutes")
+        self.assertEqual(gw.hours_phrase(1.0), "about 1 hour")
+
+    def test_tiny_value_is_not_claimed(self):
+        line, _ = self.moment("ch01", words=300)       # ~8 minutes claimed: say nothing about value
+        self.assertNotIn("That's", line)
+        self.assertTrue(line.startswith("Chapter 3 passed all 3 checks ✓. Ghost Writer is free;"))
+
+    def test_assumptions_come_from_funding_status(self):
+        fs = dict(STATUS, value_estimates={"baseline_words_per_hour": 500, "claim_share": 0.25})
+        self.assertAlmostEqual(gw.value_estimate(1000, fs)["claimed_hours"], 0.5)
+
+    def test_repo_value_estimates_are_cited_and_labeled(self):
+        ve = json.loads((ROOT / "FUNDING-STATUS.json").read_text())["value_estimates"]
+        self.assertEqual(ve["label"], "estimate")
+        self.assertLessEqual(ve["claim_share"], 0.5)
+        self.assertTrue(ve["benchmarks"] and all(b.get("source") and b.get("url") for b in ve["benchmarks"]))
+
+    def test_fund_shows_the_math_sources_and_the_last_estimate(self):
+        self.status_file.write_text((ROOT / "FUNDING-STATUS.json").read_text())
+        self.moment("ch03", words=6840)
+        code, out = self.cli("fund")
+        self.assertEqual(code, 0)
+        self.assertIn("ESTIMATE", out)
+        self.assertIn("/ 1,140 words per hour x 50%", out)
+        self.assertIn("Karat", out)
+        self.assertIn("your last: Chapter 3, 6,840 words / 1,140 = 6.0 h naive x 50% = 3.0 h", out)
+
+    def test_full_draft_sums_every_chapter(self):
+        (self.book / "spine.md").write_text("| # | Chapter |\n|---|---|\n| ch01 | One |\n| ch02 | Two |\n")
+        (self.book / "chapters").mkdir(exist_ok=True)
+        (self.book / "chapters" / "ch01.md").write_text(GOOD)
+        d = self.book / "drafts" / "ch02"
+        d.mkdir(parents=True)
+        (d / "run-1.md").write_text(GOOD)
+        seen = {}
+        real = gw.fund_milestone
+        def spy(moment, key, prefix, a=None, **kw):
+            seen[moment] = kw.get("words")
+            return real(moment, key, prefix, a, **kw)
+        with mock.patch.object(gw, "fund_milestone", spy):
+            self.assertEqual(self.cli("promote", str(self.book), "ch02", "run-1")[0], 0)
+        one = gw.ai_tell_report(self.book / "chapters" / "ch01.md")["words"]
+        self.assertEqual(seen, {"full-draft": 2 * one})
 
 
 class TestFundSilence(FundTestCase):
@@ -386,7 +448,7 @@ class TestFundSilence(FundTestCase):
     def test_fund_command_shows_cost_raised_and_link_on_demand(self):
         code, out = self.cli("fund")
         self.assertEqual(code, 0)
-        self.assertIn("~$412 in AI so far, $37 covered. Chip in $3: https://github.com/sponsors/laurencewong", out)
+        self.assertIn("~$412 in AI, $37 covered. Chip in $3: https://github.com/sponsors/laurencewong", out)
 
 
 class TestNoAskFromTheModel(unittest.TestCase):

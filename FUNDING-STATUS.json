@@ -20,5 +20,29 @@
       "when": "every chapter in the spine has been promoted",
       "why": "A complete, gate-passing draft of the whole book is the full payoff the author came for."
     }
-  ]
+  ],
+  "value_estimates": {
+    "_about": "Assumptions behind the 'hours of drafting you didn't do' line. It is an ESTIMATE, always labeled as one, and deliberately low. `ghostwriter.py fund` prints this math. Edit the numbers here, not in code.",
+    "label": "estimate",
+    "unit": "hours of drafting",
+    "formula": "words in the passing chapter / baseline_words_per_hour x claim_share, rounded down; full draft = the same on all promoted chapters' words; under 10 minutes = no value claim",
+    "baseline_words_per_hour": 1140,
+    "claim_share": 0.5,
+    "per_moment": {
+      "chapter-passed": "words in the passing chapter (the shortest passing run, at a tournament)",
+      "full-draft": "sum of words in every promoted chapter in the spine"
+    },
+    "benchmarks": [
+      {
+        "claim": "Composing text at a keyboard averaged 19.0 words per minute (about 1,140 words per hour); transcribing averaged 32.5.",
+        "source": "Karat, Halverson, Horn & Karat (1999), 'Patterns of entry and correction in large vocabulary continuous speech recognition systems', CHI '99.",
+        "url": "https://doi.org/10.1145/302979.303160"
+      }
+    ],
+    "why_conservative": [
+      "the benchmark is raw composing speed in a short lab session, faster than real book drafting: a sourced chapter also needs research, structure and revision, which it leaves out",
+      "only half of the hours that fast pace implies are claimed",
+      "hours are rounded down, and the shortest passing draft is used"
+    ]
+  }
 }

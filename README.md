@@ -68,14 +68,15 @@ Ghost Writer never imitates another writer. It will not take a "write like [famo
 Ghost Writer is free. Building it costs real money in AI time, so the CLI may print **one plain line** at a moment where you have just gotten something out of it, for example:
 
 ```
-Chapter 3 passed all 3 checks ✓. Ghost Writer is free; building it has cost ~$6.15 in AI so far, $0 covered. Chip in $3: https://github.com/sponsors/laurencewong
+Chapter 3 passed all 3 checks ✓. That's about 3 hours of drafting you didn't do (estimate: `ghostwriter.py fund`). Ghost Writer is free; building it cost ~$6.15 in AI, $0 covered. Chip in $3: https://github.com/sponsors/laurencewong
 ```
 
 - **When:** only at the value moments declared in [`FUNDING-STATUS.json`](FUNDING-STATUS.json): the first time a chapter passes all three gates, and when the whole draft is done. Never mid-task.
+- **The "hours" figure is an estimate, and a low one.** Words in the passing chapter ÷ a published composing-speed benchmark (19 words a minute, Karat et al. 1999), and only half of that is claimed, rounded down. Under 10 minutes, the line makes no value claim. The assumptions sit in `FUNDING-STATUS.json` under `value_estimates`; `python3 scripts/ghostwriter.py fund` prints the math and the source.
 - **How often:** the first of those moments, then about every 10th, and never more than once a week.
 - **Never from the model.** The prompts and charter never mention money (a test checks). Only the script prints the line.
 - **Silent** when output is piped or not a terminal, in CI, with `GHOSTWRITER_NO_FUND=1` or `--quiet`, after `python3 scripts/ghostwriter.py fund --off`, and for good once the build cost is covered.
-- `python3 scripts/ghostwriter.py fund` shows the cost, what sponsors have covered, and the link, any time. State lives in `~/.config/ghostwriter/fund.json` (honors `XDG_CONFIG_HOME`) and never leaves your machine.
+- `python3 scripts/ghostwriter.py fund` shows the cost, what sponsors have covered, the link and the estimate's math, any time. State lives in `~/.config/ghostwriter/fund.json` (honors `XDG_CONFIG_HOME`) and never leaves your machine.
 
 ## License
 

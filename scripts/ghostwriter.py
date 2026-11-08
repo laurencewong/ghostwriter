@@ -20,7 +20,8 @@ Commands (run `python3 scripts/ghostwriter.py <command> -h` for flags):
   tournament           run all gates on every draft of a chapter and write a scoreboard
   promote              copy a winning draft to chapters/, only if it passes every gate
   status               show where a book is in the pipeline
-  fund                 show what building Ghost Writer has cost and how much sponsors have covered
+  fund                 show what building Ghost Writer has cost, how much sponsors have covered, and
+                       the math behind the "hours of drafting" estimate
                        (`fund --off` turns off the occasional thank-you line; `fund --on` turns it back on)
 """
 from __future__ import annotations
@@ -491,10 +492,11 @@ def cmd_tournament(a) -> int:
         die(f"no drafts in {d} (expected run-1.md, run-2.md, ...)")
     rows = ["| run | words | claims cited/total | unsupported | AI tells (hard/soft per 1k) | thesis | all gates |",
             "|---|---|---|---|---|---|---|"]
-    results = {}
+    results, run_words = {}, {}
     for r in runs:
         g = gate_all(book, r)
         results[r.stem] = g["pass"]
+        run_words[r.stem] = g["ai_tells"]["words"]
         p, t, h = g["provenance"], g["ai_tells"], g["thesis"]
         rows.append(f"| {r.stem} | {t['words']} | {p['cited'] + p['opinion']}/{p['claims']} | {len(p['unsupported'])} "
                     f"| {len(t['hard'])}/{t['soft_per_1000']} | {'ok' if h['pass'] else 'FAIL'} "
@@ -513,9 +515,10 @@ def cmd_tournament(a) -> int:
     sb.write_text("\n".join(out))
     print("\n".join(rows))
     print(f"eligible: {', '.join(eligible) or 'none'}  (scoreboard: {sb})")
-    if eligible:
+    if eligible:  # the shortest passing draft, so the estimate never rounds up
         fund_milestone("chapter-passed", f"{book.resolve()}:{a.chapter}",
-                       f"{chapter_label(a.chapter)} passed all 3 checks \u2713.", a)
+                       f"{chapter_label(a.chapter)} passed all 3 checks \u2713.", a,
+                       words=min(run_words[k] for k in eligible))
     return 0
 
 
@@ -538,11 +541,13 @@ def cmd_promote(a) -> int:
     spine = spine_chapters(book)
     done = {p.stem for p in (book / "chapters").glob("*.md")}
     if spine and set(spine) <= done:
+        total = sum(ai_tell_report(book / "chapters" / f"{c}.md")["words"] for c in spine)
         fund_milestone("full-draft", f"{book.resolve()}",
-                       f"Full draft done: all {len(spine)} chapters passed all 3 checks \u2713.", a)
+                       f"Full draft done: all {len(spine)} chapters passed all 3 checks \u2713.", a, words=total)
     else:
         fund_milestone("chapter-passed", f"{book.resolve()}:{a.chapter}",
-                       f"{chapter_label(a.chapter)} passed all 3 checks \u2713.", a)
+                       f"{chapter_label(a.chapter)} passed all 3 checks \u2713.", a,
+                       words=g["ai_tells"]["words"])
     return 0
 
 
@@ -593,6 +598,9 @@ def cmd_status(a) -> int:
 #   - the first value moment, then about every 10th, and at most once per 7 days
 #   - silent when stdout is not a terminal, in CI, with GHOSTWRITER_NO_FUND=1 or --quiet,
 #     after `fund --off`, or once the build cost is fully covered
+#   - the line leads with the value the author just got, as a labeled ESTIMATE: words in the
+#     passing chapter / a published drafting-speed benchmark, claimed at 50%, rounded DOWN. The
+#     assumptions live in FUNDING-STATUS.json (value_estimates); `fund` prints the math and sources.
 FUND_EVERY = 10
 FUND_MIN_GAP = timedelta(days=7)
 CI_VARS = ("CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE", "CIRCLECI", "TRAVIS", "JENKINS_URL",
@@ -651,12 +659,54 @@ def fund_line(fs: dict | None) -> str:
     url = (fs or {}).get("sponsor_url") or DEFAULT_SPONSOR_URL
     n = fund_numbers(fs)
     if n is None:
-        return f"Ghost Writer is free; what building it has cost in AI is pending a tally. Chip in $3: {url}"
+        return f"Ghost Writer is free; what building it cost in AI is pending a tally. Chip in $3: {url}"
     cost, raised = n
     if fund_covered(fs):
         return f"Ghost Writer is free, and its ~{money(cost)} AI build cost is fully covered by sponsors. Thank you."
-    return (f"Ghost Writer is free; building it has cost ~{money(cost)} in AI so far, {money(raised)} covered. "
-            f"Chip in $3: {url}")
+    return f"Ghost Writer is free; building it cost ~{money(cost)} in AI, {money(raised)} covered. Chip in $3: {url}"
+
+
+# Value estimate. Defaults match FUNDING-STATUS.json; the file wins when present.
+DEFAULT_BASELINE_WPH = 1140   # Karat et al. 1999: composing at a keyboard averaged 19.0 words/minute
+DEFAULT_CLAIM_SHARE = 0.5     # claim at most half of the naive estimate
+MIN_CLAIM_HOURS = 1 / 6       # under 10 minutes, say nothing about value
+
+
+def value_assumptions(fs: dict | None) -> tuple[float, float]:
+    ve = (fs or {}).get("value_estimates") or {}
+    try:
+        wph = float(ve.get("baseline_words_per_hour") or DEFAULT_BASELINE_WPH)
+        share = float(ve.get("claim_share") or DEFAULT_CLAIM_SHARE)
+    except (TypeError, ValueError):
+        wph, share = DEFAULT_BASELINE_WPH, DEFAULT_CLAIM_SHARE
+    return max(wph, 1.0), min(max(share, 0.0), DEFAULT_CLAIM_SHARE)  # never claim more than half
+
+
+def value_estimate(words: int | None, fs: dict | None) -> dict | None:
+    """Hours of drafting the author did not do: words / benchmark words-per-hour x claim share."""
+    if not words or words <= 0:
+        return None
+    wph, share = value_assumptions(fs)
+    naive = words / wph
+    return {"words": int(words), "words_per_hour": wph, "claim_share": share,
+            "naive_hours": naive, "claimed_hours": naive * share}
+
+
+def hours_phrase(h: float) -> str | None:
+    """Rounded DOWN, never shown as precise: 'about 40 minutes', 'about 1 hour', 'about 3 hours'."""
+    if h < MIN_CLAIM_HOURS:
+        return None
+    if h < 1:
+        return f"about {int(h * 60) // 10 * 10} minutes"
+    half = int(h * 2) / 2  # down to the half hour
+    if half == 1:
+        return "about 1 hour"
+    return f"about {half:g} hours"
+
+
+def value_clause(est: dict | None) -> str:
+    phrase = hours_phrase(est["claimed_hours"]) if est else None
+    return f" That's {phrase} of drafting you didn't do (estimate: `ghostwriter.py fund`)." if phrase else ""
 
 
 def declared_moments(fs: dict | None) -> set[str]:
@@ -677,8 +727,9 @@ def fund_silenced(a=None) -> bool:
 
 
 def fund_milestone(moment: str, key: str, prefix: str, a=None, now: datetime | None = None,
-                   fs: dict | None = None) -> str | None:
-    """Count a value moment and maybe print the one-line ask. Returns the line printed, or None."""
+                   fs: dict | None = None, words: int | None = None) -> str | None:
+    """Count a value moment and maybe print the one-line ask. Returns the line printed, or None.
+    words: prose words the author now holds at this moment (one chapter, or the whole draft)."""
     if fund_silenced(a):
         return None
     fs = load_funding_status() if fs is None else fs
@@ -696,6 +747,10 @@ def fund_milestone(moment: str, key: str, prefix: str, a=None, now: datetime | N
     st["seen"] = (seen + [tag])[-500:]
     st["moments"] = int(st.get("moments", 0)) + 1
     st["since_ask"] = int(st.get("since_ask", 0)) + 1
+    est = value_estimate(words, fs)
+    if est:  # so `fund` can show the author the math behind their own last estimate
+        st["last_estimate"] = {"moment": moment, "label": prefix.split(" passed")[0].split(":")[0],
+                               "words": est["words"]}
     now = now or datetime.now(timezone.utc)
     last = st.get("last_ask")
     try:
@@ -705,7 +760,7 @@ def fund_milestone(moment: str, key: str, prefix: str, a=None, now: datetime | N
     due = last_dt is None or (st["since_ask"] >= FUND_EVERY and now - last_dt >= FUND_MIN_GAP)
     line = None
     if due:
-        line = f"{prefix} {fund_line(fs)}"
+        line = f"{prefix}{value_clause(est)} {fund_line(fs)}"
         st["last_ask"], st["since_ask"], st["asks"] = now.isoformat(), 0, int(st.get("asks", 0)) + 1
         print(f"\n{line}")
     save_fund_state(st)
@@ -727,9 +782,31 @@ def cmd_fund(a) -> int:
               f"   updated: {fs.get('updated', 'unknown')}")
     for m in (fs or {}).get("value_moments", []):
         print(f"  asks only when: {m.get('when')}")
+    print_value_math(fs, load_fund_state().get("last_estimate"))
     print(f"  occasional line: {'off' if load_fund_state().get('off') else 'on'} "
           "(`fund --off` to hide; also silent in CI, when piped, or with GHOSTWRITER_NO_FUND=1)")
     return 0
+
+
+def print_value_math(fs: dict | None, last: dict | None) -> None:
+    ve = (fs or {}).get("value_estimates") or {}
+    wph, share = value_assumptions(fs)
+    print("")
+    print("How the \"hours of drafting you didn't do\" ESTIMATE is worked out (an estimate, not a measurement):")
+    print(f"  hours = words in the passing chapter / {wph:,.0f} words per hour x {share:.0%}, rounded down")
+    print("  a full draft = the same math on the words in every promoted chapter")
+    for b in ve.get("benchmarks", []):
+        print(f"  benchmark: {b.get('claim')}")
+        print(f"    source: {b.get('source')} {b.get('url', '')}".rstrip())
+    for why in ve.get("why_conservative", []):
+        print(f"  conservative because: {why}")
+    ex = value_estimate(4000, fs)
+    print(f"  example: 4,000 words / {wph:,.0f} = {ex['naive_hours']:.1f} h naive x {share:.0%} = "
+          f"{ex['claimed_hours']:.1f} h -> \"{hours_phrase(ex['claimed_hours']) or 'not shown'}\"")
+    est = value_estimate((last or {}).get("words"), fs)
+    if est:
+        print(f"  your last: {last.get('label')}, {est['words']:,} words / {wph:,.0f} = {est['naive_hours']:.1f} h naive "
+              f"x {share:.0%} = {est['claimed_hours']:.1f} h -> \"{hours_phrase(est['claimed_hours']) or 'not shown'}\"")
 
 
 # ---------------------------------------------------------------- main
