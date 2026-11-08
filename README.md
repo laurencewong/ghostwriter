@@ -68,7 +68,7 @@ Ghost Writer never imitates another writer. It will not take a "write like [famo
 Ghost Writer is free. Building it costs real money in AI time, so the CLI may print **one plain line** at a moment where you have just gotten something out of it, for example:
 
 ```
-Chapter 3 passed all 3 checks ✓. Ghost Writer is free; building it has cost ~$3.75 in AI so far, $0 covered. Chip in $3: https://github.com/sponsors/laurencewong
+Chapter 3 passed all 3 checks ✓. Ghost Writer is free; building it has cost ~$6.15 in AI so far, $0 covered. Chip in $3: https://github.com/sponsors/laurencewong
 ```
 
 - **When:** only at the value moments declared in [`FUNDING-STATUS.json`](FUNDING-STATUS.json): the first time a chapter passes all three gates, and when the whole draft is done. Never mid-task.
@@ -82,4 +82,4 @@ Chapter 3 passed all 3 checks ✓. Ghost Writer is free; building it has cost ~$
 Not chosen yet. See [LICENSE](LICENSE). Until it is, no license is granted.
 
 ---
-<sub>Built with Claude Code (~7.6M Claude tokens so far; see `FUNDING-STATUS.json`). If it saved you time, you can help cover the tokens: [Sponsor](https://github.com/sponsors/laurencewong).</sub>
+<sub>Built with Claude Code (~12M Claude tokens so far; see `FUNDING-STATUS.json`). If it saved you time, you can help cover the tokens: [Sponsor](https://github.com/sponsors/laurencewong).</sub>
