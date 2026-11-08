@@ -2,12 +2,16 @@
 import contextlib
 import io
 import json
+import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -241,6 +245,173 @@ class TestDemoBook(unittest.TestCase):
         for s in json.loads((DEMO / "sources" / "index.json").read_text())["sources"]:
             if s["kind"] != "interview":
                 self.assertIn("fictional", (s["title"] + s["origin"]).lower(), s["id"])
+
+
+class TTY(io.StringIO):
+    def isatty(self):
+        return True
+
+
+STATUS = {"sponsor_url": "https://github.com/sponsors/laurencewong", "cost_usd": 412.5, "raised_usd": 37,
+          "value_moments": [{"id": "chapter-passed", "surface": "cli", "when": "w", "why": "y"},
+                            {"id": "full-draft", "surface": "cli", "when": "w", "why": "y"}]}
+T0 = datetime(2026, 11, 8, tzinfo=timezone.utc)
+
+
+class FundTestCase(BookTestCase):
+    """The in-flow sponsor line: value moments only, capped, opt-out, never from the model."""
+
+    def setUp(self):
+        super().setUp()
+        env = {k: v for k, v in os.environ.items() if k not in gw.CI_VARS and k != "GHOSTWRITER_NO_FUND"}
+        env["XDG_CONFIG_HOME"] = str(self.tmp / "xdg")
+        self.env = mock.patch.dict(os.environ, env, clear=True)
+        self.env.start()
+        self.status_file = self.tmp / "FUNDING-STATUS.json"
+        self.status_file.write_text(json.dumps(STATUS))
+        self.fsf = mock.patch.object(gw, "FUNDING_STATUS_FILE", self.status_file)
+        self.fsf.start()
+
+    def tearDown(self):
+        self.fsf.stop()
+        self.env.stop()
+
+    def moment(self, key, now=T0, moment="chapter-passed", tty=True, a=None):
+        out = TTY() if tty else io.StringIO()
+        with contextlib.redirect_stdout(out):
+            line = gw.fund_milestone(moment, key, "Chapter 3 passed all 3 checks ✓.", a, now=now)
+        return line, out.getvalue()
+
+    def cli(self, *args):
+        out = TTY()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = gw.main(list(args))
+        return code, out.getvalue()
+
+    def state(self):
+        f = gw.fund_state_path()
+        return json.loads(f.read_text()) if f.exists() else {}
+
+
+class TestFundCap(FundTestCase):
+    def test_first_moment_asks_with_the_exact_line(self):
+        line, out = self.moment("ch03")
+        self.assertEqual(line, "Chapter 3 passed all 3 checks ✓. Ghost Writer is free; building it has cost "
+                               "~$412 in AI so far, $37 covered. Chip in $3: https://github.com/sponsors/laurencewong")
+        self.assertIn(line, out)
+        self.assertEqual(gw.fund_state_path(), self.tmp / "xdg" / "ghostwriter" / "fund.json")
+
+    def test_then_every_10th_and_never_within_7_days(self):
+        self.assertIsNotNone(self.moment("k0")[0])
+        for i in range(1, 10):                       # moments 2..10: 9 since the ask, too few
+            self.assertIsNone(self.moment(f"k{i}", T0 + timedelta(days=30))[0])
+        self.assertIsNotNone(self.moment("k10", T0 + timedelta(days=30))[0])   # 10th since the ask
+        for i in range(11, 40):                      # 10+ more, but all inside 7 days of that ask
+            self.assertIsNone(self.moment(f"k{i}", T0 + timedelta(days=33))[0])
+        self.assertIsNotNone(self.moment("k40", T0 + timedelta(days=38))[0])   # 7 days later
+        self.assertEqual(self.state()["asks"], 3)
+
+    def test_a_chapter_counts_once(self):
+        self.moment("ch01")
+        self.moment("ch01")
+        self.assertEqual(self.state()["moments"], 1)
+
+    def test_only_declared_value_moments_ask(self):
+        self.assertIsNone(self.moment("ch01", moment="sources-added")[0])
+        self.assertEqual(self.state(), {})
+
+    def test_missing_status_file_says_pending(self):
+        self.status_file.unlink()
+        line, _ = self.moment("ch01")
+        self.assertIn("pending", line)
+        self.assertIn("https://github.com/sponsors/laurencewong", line)
+
+    def test_tournament_and_full_draft_moments_from_the_cli(self):
+        d = self.book / "drafts" / "ch01"
+        d.mkdir(parents=True)
+        (d / "run-1.md").write_text(GOOD)
+        code, out = self.cli("tournament", str(self.book), "ch01")
+        self.assertEqual(code, 0)
+        self.assertIn("Chapter 1 passed all 3 checks ✓. Ghost Writer is free;", out)
+        (self.book / "spine.md").write_text("| # | Chapter |\n|---|---|\n| ch01 | Only chapter |\n")
+        code, out = self.cli("promote", str(self.book), "ch01", "run-1")
+        self.assertEqual(code, 0)
+        self.assertNotIn("sponsors", out)                          # counted, but capped: 1 since the last ask
+        self.assertIn("full-draft:", " ".join(self.state()["seen"]))
+        self.assertEqual(self.state()["moments"], 2)
+
+
+class TestFundSilence(FundTestCase):
+    def assertSilent(self, **kw):
+        line, out = self.moment("ch01", **kw)
+        self.assertIsNone(line)
+        self.assertNotIn("sponsors", out)
+
+    def test_silent_when_not_a_terminal(self):
+        self.assertSilent(tty=False)
+        self.assertEqual(self.state(), {})       # silence writes no state either
+
+    def test_silent_in_ci(self):
+        for var in ("CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE"):
+            with mock.patch.dict(os.environ, {var: "true"}):
+                self.assertSilent()
+
+    def test_silent_with_env_opt_out(self):
+        with mock.patch.dict(os.environ, {"GHOSTWRITER_NO_FUND": "1"}):
+            self.assertSilent()
+
+    def test_silent_with_quiet_flag_before_or_after_the_command(self):
+        d = self.book / "drafts" / "ch01"
+        d.mkdir(parents=True)
+        (d / "run-1.md").write_text(GOOD)
+        for args in (["--quiet", "tournament", str(self.book), "ch01"],
+                     ["tournament", str(self.book), "ch01", "-q"]):
+            code, out = self.cli(*args)
+            self.assertEqual(code, 0)
+            self.assertNotIn("sponsors", out)
+
+    def test_silent_after_fund_off_and_back_on(self):
+        self.assertEqual(self.cli("fund", "--off")[0], 0)
+        self.assertSilent()
+        self.cli("fund", "--on")
+        self.assertIsNotNone(self.moment("ch02")[0])
+
+    def test_stops_once_the_goal_is_covered(self):
+        self.status_file.write_text(json.dumps(dict(STATUS, raised_usd=412.5)))
+        self.assertSilent()
+        code, out = self.cli("fund")
+        self.assertIn("fully covered", out)
+        self.assertNotIn("Chip in", out)
+
+    def test_fund_command_shows_cost_raised_and_link_on_demand(self):
+        code, out = self.cli("fund")
+        self.assertEqual(code, 0)
+        self.assertIn("~$412 in AI so far, $37 covered. Chip in $3: https://github.com/sponsors/laurencewong", out)
+
+
+class TestNoAskFromTheModel(unittest.TestCase):
+    """Only the CLI ever mentions money. The prompts and charter files the model reads never do."""
+    PATTERN = re.compile(r"sponsor|donat|chip in", re.I)
+
+    def llm_files(self):
+        files = [ROOT / "AGENT.md", ROOT / "CLAUDE.md"]
+        for d in ("prompts", "book-template", ".claude/agents", "skills"):
+            if (ROOT / d).is_dir():
+                files += [p for p in (ROOT / d).rglob("*") if p.is_file()]
+        return [f for f in files if f.is_file()]
+
+    def test_prompts_and_charter_never_ask_for_money(self):
+        files = self.llm_files()
+        self.assertGreater(len(files), 10)
+        hits = [f"{f.relative_to(ROOT)}: {m.group(0)}" for f in files
+                for m in [self.PATTERN.search(f.read_text(errors="replace"))] if m]
+        self.assertEqual(hits, [])
+
+    def test_repo_declares_its_value_moments(self):
+        fs = json.loads((ROOT / "FUNDING-STATUS.json").read_text())
+        self.assertTrue(fs["value_moments"])
+        for m in fs["value_moments"]:
+            self.assertTrue(m["id"] and m["when"] and len(m["why"].split()) >= 8, m)
 
 
 class TestBoundaryHook(unittest.TestCase):

@@ -63,9 +63,23 @@ The AI-tell gate exists because generic prose is bad prose. It is not a tool for
 
 Ghost Writer never imitates another writer. It will not take a "write like [famous author]" instruction, and it will not learn a voice from anyone's work but yours. Pastiche is weak writing, and copying a living writer's style from their text invites a copyright problem.
 
+## Supporting Ghost Writer
+
+Ghost Writer is free. Building it costs real money in AI time, so the CLI may print **one plain line** at a moment where you have just gotten something out of it, for example:
+
+```
+Chapter 3 passed all 3 checks ✓. Ghost Writer is free; building it has cost ~$3.75 in AI so far, $0 covered. Chip in $3: https://github.com/sponsors/laurencewong
+```
+
+- **When:** only at the value moments declared in [`FUNDING-STATUS.json`](FUNDING-STATUS.json): the first time a chapter passes all three gates, and when the whole draft is done. Never mid-task.
+- **How often:** the first of those moments, then about every 10th, and never more than once a week.
+- **Never from the model.** The prompts and charter never mention money (a test checks). Only the script prints the line.
+- **Silent** when output is piped or not a terminal, in CI, with `GHOSTWRITER_NO_FUND=1` or `--quiet`, after `python3 scripts/ghostwriter.py fund --off`, and for good once the build cost is covered.
+- `python3 scripts/ghostwriter.py fund` shows the cost, what sponsors have covered, and the link, any time. State lives in `~/.config/ghostwriter/fund.json` (honors `XDG_CONFIG_HOME`) and never leaves your machine.
+
 ## License
 
 Not chosen yet. See [LICENSE](LICENSE). Until it is, no license is granted.
 
 ---
-<sub>Built with Claude Code (token count pending the build ledger). If it saved you time, you can help cover the tokens: see the Sponsor button.</sub>
+<sub>Built with Claude Code (~7.6M Claude tokens so far; see `FUNDING-STATUS.json`). If it saved you time, you can help cover the tokens: [Sponsor](https://github.com/sponsors/laurencewong).</sub>

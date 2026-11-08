@@ -1,0 +1,24 @@
+{
+  "_about": "Read by `ghostwriter.py fund` and the occasional thank-you line. cost_usd = the AI it took to build Ghost Writer, at API list price, and it is the one collective goal: once raised_usd reaches it, the line stops for good. Numbers are refreshed from the maintainer's build ledger. value_moments are the only points where the line may appear.",
+  "repo": "ghostwriter",
+  "sponsor_url": "https://github.com/sponsors/laurencewong",
+  "suggested_usd": 3,
+  "cost_usd": 3.75,
+  "raised_usd": 0,
+  "tokens": 7572566,
+  "updated": "2026-11-08",
+  "value_moments": [
+    {
+      "id": "chapter-passed",
+      "surface": "cli",
+      "when": "the first time a chapter draft passes all 3 checks (tournament or promote)",
+      "why": "A chapter that is sourced, sounds like the author and survives its strongest objection is the first finished piece of the book the author is holding."
+    },
+    {
+      "id": "full-draft",
+      "surface": "cli",
+      "when": "every chapter in the spine has been promoted",
+      "why": "A complete, gate-passing draft of the whole book is the full payoff the author came for."
+    }
+  ]
+}

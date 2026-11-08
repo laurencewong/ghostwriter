@@ -20,23 +20,27 @@ Commands (run `python3 scripts/ghostwriter.py <command> -h` for flags):
   tournament           run all gates on every draft of a chapter and write a scoreboard
   promote              copy a winning draft to chapters/, only if it passes every gate
   status               show where a book is in the pipeline
+  fund                 show what building Ghost Writer has cost and how much sponsors have covered
+                       (`fund --off` turns off the occasional thank-you line; `fund --on` turns it back on)
 """
 from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import os
 import re
 import shutil
 import sys
 from collections import Counter
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "book-template"
 AI_TELLS_FILE = ROOT / "data" / "ai-tells.txt"
+FUNDING_STATUS_FILE = ROOT / "FUNDING-STATUS.json"
 
 SOURCE_KINDS = ("post", "note", "dataset", "article", "interview", "book", "talk", "other")
 XREF_RX = re.compile(r"\b(chapters?|ch|part|section|stage|step|figure|table)\s*\d+\b", re.I)  # cross-references are not claims
@@ -509,6 +513,9 @@ def cmd_tournament(a) -> int:
     sb.write_text("\n".join(out))
     print("\n".join(rows))
     print(f"eligible: {', '.join(eligible) or 'none'}  (scoreboard: {sb})")
+    if eligible:
+        fund_milestone("chapter-passed", f"{book.resolve()}:{a.chapter}",
+                       f"{chapter_label(a.chapter)} passed all 3 checks \u2713.", a)
     return 0
 
 
@@ -528,7 +535,25 @@ def cmd_promote(a) -> int:
     dest = book / "chapters" / f"{a.chapter}.md"
     shutil.copyfile(src, dest)
     print(f"promoted {src.name} -> {dest}")
+    spine = spine_chapters(book)
+    done = {p.stem for p in (book / "chapters").glob("*.md")}
+    if spine and set(spine) <= done:
+        fund_milestone("full-draft", f"{book.resolve()}",
+                       f"Full draft done: all {len(spine)} chapters passed all 3 checks \u2713.", a)
+    else:
+        fund_milestone("chapter-passed", f"{book.resolve()}:{a.chapter}",
+                       f"{chapter_label(a.chapter)} passed all 3 checks \u2713.", a)
     return 0
+
+
+def chapter_label(chapter: str) -> str:
+    m = re.fullmatch(r"ch0*(\d+)", chapter, re.I)
+    return f"Chapter {m.group(1)}" if m else f"Chapter {chapter}"
+
+
+def spine_chapters(book: Path) -> list[str]:
+    f = book / "spine.md"
+    return re.findall(r"(?m)^\|\s*(ch\d+)\s*\|", f.read_text()) if f.is_file() else []
 
 
 # ---------------------------------------------------------------- status
@@ -559,9 +584,158 @@ def cmd_status(a) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- fund
+# Ghost Writer is free. Building it costs real money in AI time. At a moment where the author has
+# just gotten value (declared in FUNDING-STATUS.json under value_moments), this CLI may print ONE
+# plain line saying what the build cost and how much sponsors have covered. Rules:
+#   - only at a declared value moment, never mid-task, never from the model (prompts/ and the
+#     charter files never mention money; a test enforces that)
+#   - the first value moment, then about every 10th, and at most once per 7 days
+#   - silent when stdout is not a terminal, in CI, with GHOSTWRITER_NO_FUND=1 or --quiet,
+#     after `fund --off`, or once the build cost is fully covered
+FUND_EVERY = 10
+FUND_MIN_GAP = timedelta(days=7)
+CI_VARS = ("CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE", "CIRCLECI", "TRAVIS", "JENKINS_URL",
+           "TF_BUILD", "TEAMCITY_VERSION", "BITBUCKET_BUILD_NUMBER", "CODEBUILD_BUILD_ID", "DRONE")
+DEFAULT_SPONSOR_URL = "https://github.com/sponsors/laurencewong"
+
+
+def fund_state_path() -> Path:
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return Path(base) / "ghostwriter" / "fund.json"
+
+
+def load_fund_state() -> dict:
+    try:
+        st = json.loads(fund_state_path().read_text())
+        return st if isinstance(st, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_fund_state(st: dict) -> None:
+    p = fund_state_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(st, indent=2) + "\n")
+    except OSError:
+        pass  # a read-only home must never break the real command
+
+
+def load_funding_status(path: Path | None = None) -> dict | None:
+    """FUNDING-STATUS.json, or None if it is missing or unreadable (the line then says 'pending')."""
+    try:
+        d = json.loads((path or FUNDING_STATUS_FILE).read_text())
+        return d if isinstance(d, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def money(x: float) -> str:
+    return f"${x:,.0f}" if x >= 10 or float(x).is_integer() else f"${x:,.2f}"
+
+
+def fund_numbers(fs: dict | None) -> tuple[float, float] | None:
+    try:
+        return float(fs["cost_usd"]), float(fs.get("raised_usd") or 0)
+    except (TypeError, KeyError, ValueError):
+        return None
+
+
+def fund_covered(fs: dict | None) -> bool:
+    n = fund_numbers(fs)
+    return bool(n) and n[0] > 0 and n[1] >= n[0]
+
+
+def fund_line(fs: dict | None) -> str:
+    url = (fs or {}).get("sponsor_url") or DEFAULT_SPONSOR_URL
+    n = fund_numbers(fs)
+    if n is None:
+        return f"Ghost Writer is free; what building it has cost in AI is pending a tally. Chip in $3: {url}"
+    cost, raised = n
+    if fund_covered(fs):
+        return f"Ghost Writer is free, and its ~{money(cost)} AI build cost is fully covered by sponsors. Thank you."
+    return (f"Ghost Writer is free; building it has cost ~{money(cost)} in AI so far, {money(raised)} covered. "
+            f"Chip in $3: {url}")
+
+
+def declared_moments(fs: dict | None) -> set[str]:
+    return {m.get("id") for m in (fs or {}).get("value_moments", []) if isinstance(m, dict)}
+
+
+def fund_silenced(a=None) -> bool:
+    if getattr(a, "quiet", False):
+        return True
+    if os.environ.get("GHOSTWRITER_NO_FUND", "").strip() not in ("", "0"):
+        return True
+    if any(os.environ.get(v, "").strip() not in ("", "0", "false") for v in CI_VARS):
+        return True
+    try:
+        return not sys.stdout.isatty()
+    except (AttributeError, ValueError):
+        return True
+
+
+def fund_milestone(moment: str, key: str, prefix: str, a=None, now: datetime | None = None,
+                   fs: dict | None = None) -> str | None:
+    """Count a value moment and maybe print the one-line ask. Returns the line printed, or None."""
+    if fund_silenced(a):
+        return None
+    fs = load_funding_status() if fs is None else fs
+    if fs is not None and moment not in declared_moments(fs):
+        return None  # only at a moment the repo declared as the point the user got value
+    if fund_covered(fs):
+        return None
+    st = load_fund_state()
+    if st.get("off"):
+        return None
+    seen = st.get("seen", [])
+    tag = f"{moment}:{hashlib.sha256(key.encode()).hexdigest()[:16]}"  # no book paths in the state file
+    if tag in seen:
+        return None  # each chapter's first pass counts once
+    st["seen"] = (seen + [tag])[-500:]
+    st["moments"] = int(st.get("moments", 0)) + 1
+    st["since_ask"] = int(st.get("since_ask", 0)) + 1
+    now = now or datetime.now(timezone.utc)
+    last = st.get("last_ask")
+    try:
+        last_dt = datetime.fromisoformat(last) if last else None
+    except ValueError:
+        last_dt = None
+    due = last_dt is None or (st["since_ask"] >= FUND_EVERY and now - last_dt >= FUND_MIN_GAP)
+    line = None
+    if due:
+        line = f"{prefix} {fund_line(fs)}"
+        st["last_ask"], st["since_ask"], st["asks"] = now.isoformat(), 0, int(st.get("asks", 0)) + 1
+        print(f"\n{line}")
+    save_fund_state(st)
+    return line
+
+
+def cmd_fund(a) -> int:
+    if a.off or a.on:
+        st = load_fund_state()
+        st["off"] = bool(a.off)
+        save_fund_state(st)
+        print("fund line off. Turn it back on with `fund --on`." if a.off else "fund line on.")
+        return 0
+    fs = load_funding_status()
+    print(fund_line(fs))
+    n = fund_numbers(fs)
+    if n:
+        print(f"  build cost (AI, at API list price): {money(n[0])}   covered by sponsors: {money(n[1])}"
+              f"   updated: {fs.get('updated', 'unknown')}")
+    for m in (fs or {}).get("value_moments", []):
+        print(f"  asks only when: {m.get('when')}")
+    print(f"  occasional line: {'off' if load_fund_state().get('off') else 'on'} "
+          "(`fund --off` to hide; also silent in CI, when piped, or with GHOSTWRITER_NO_FUND=1)")
+    return 0
+
+
 # ---------------------------------------------------------------- main
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="ghostwriter.py", description=__doc__.split("\n")[0])
+    ap.add_argument("--quiet", "-q", action="store_true", help="never print the occasional sponsor line")
     sp = ap.add_subparsers(dest="cmd", required=True)
 
     p = sp.add_parser("init"); p.add_argument("dir"); p.add_argument("--title"); p.add_argument("--author")
@@ -591,6 +765,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sp.add_parser("promote"); p.add_argument("book"); p.add_argument("chapter"); p.add_argument("run")
     p.set_defaults(fn=cmd_promote)
     p = sp.add_parser("status"); p.add_argument("book"); p.set_defaults(fn=cmd_status)
+    p = sp.add_parser("fund"); g = p.add_mutually_exclusive_group()
+    g.add_argument("--off", action="store_true", help="never show the occasional sponsor line again")
+    g.add_argument("--on", action="store_true", help="show it again (still capped)")
+    p.set_defaults(fn=cmd_fund)
+    for p in sp.choices.values():  # --quiet also works after the subcommand
+        p.add_argument("--quiet", "-q", action="store_true", default=argparse.SUPPRESS,
+                       help="never print the occasional sponsor line")
     return ap
 
 
