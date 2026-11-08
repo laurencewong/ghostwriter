@@ -1,0 +1,33 @@
+# Generic machine-sounding prose. One per line: <hard|soft> <regex, case-insensitive>.
+# hard = any hit fails the gate. soft = fails above 4 hits per 1,000 words.
+# This gate is about QUALITY, not about hiding that AI helped. See README "Disclosure".
+hard \bdelv(e|es|ing)\b
+hard \btapestry\b
+hard \bin today's (fast-paced|digital|ever-changing)\b
+hard \bit(?:'s| is) (important|worth) (to note|noting)\b
+hard \bnavigat(e|ing) the (complexities|landscape)\b
+hard \ba testament to\b
+hard \bin the (ever-evolving|ever-changing) (world|landscape)\b
+hard \blet's dive in\b
+hard \bembark(s|ed|ing)? on a journey\b
+hard \bin the style of\b
+hard \bas an ai\b
+hard \bunlock(s|ing)? the (power|potential)\b
+hard \bgame[- ]changer\b
+soft \bseamless(ly)?\b
+soft \brobust\b
+soft \bleverag(e|es|ing)\b
+soft \bfurthermore\b
+soft \bmoreover\b
+soft \bin conclusion\b
+soft \bat the end of the day\b
+soft \brealm\b
+soft \blandscape\b
+soft \bparadigm\b
+soft \bsynerg(y|ies)\b
+soft \bcrucial\b
+soft \bpivotal\b
+soft \bnot (just|only|merely)\b[^.]{0,60}\bbut( also)?\b
+soft \bit(?:'s| is) not\b[^.]{0,40}[,;—-] ?it(?:'s| is)\b
+soft \bhere's the (thing|kicker|truth)\b
+soft \bin a world where\b

@@ -1,0 +1,44 @@
+{
+  "sources": [
+    {
+      "id": "S001",
+      "kind": "dataset",
+      "title": "Member survey, 40 respondents (fictional)",
+      "origin": "Elm Street Tool Library (fictional)",
+      "date": "2026-04-01",
+      "file": "sources/S001.md"
+    },
+    {
+      "id": "S002",
+      "kind": "dataset",
+      "title": "Lending log, year one (fictional)",
+      "origin": "Elm Street Tool Library (fictional)",
+      "date": "2026-03-15",
+      "file": "sources/S002.md"
+    },
+    {
+      "id": "S003",
+      "kind": "post",
+      "title": "The ladder I bought twice (fictional author's post)",
+      "origin": "author's blog (fictional)",
+      "date": "2025-10-02",
+      "file": "sources/S003.md"
+    },
+    {
+      "id": "S004",
+      "kind": "interview",
+      "title": "Interview answer to Q001",
+      "origin": "author interview",
+      "date": "2026-11-08",
+      "file": "sources/S004.md"
+    },
+    {
+      "id": "S005",
+      "kind": "interview",
+      "title": "Interview answer to Q002",
+      "origin": "author interview",
+      "date": "2026-11-08",
+      "file": "sources/S005.md"
+    }
+  ]
+}

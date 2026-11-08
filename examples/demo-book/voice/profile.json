@@ -1,0 +1,32 @@
+{
+  "samples": 3,
+  "sentences": 37,
+  "avg_sentence_words": 7.2,
+  "short_sentences_pct": 70,
+  "long_sentences_pct": 0,
+  "avg_paragraph_words": 22.2,
+  "questions_per_100_sentences": 2.7,
+  "first_person_openers_pct": 35.1,
+  "contractions_per_100_words": 6.77,
+  "dashes_per_100_sentences": 0.0,
+  "bullets_per_sample": 0.0,
+  "top_openers": [
+    "i",
+    "that's",
+    "it's",
+    "four",
+    "i'm",
+    "ten",
+    "both",
+    "most",
+    "so",
+    "then"
+  ],
+  "signature_bigrams": [
+    "tool library",
+    "tile saw",
+    "against owning",
+    "owning things",
+    "ten minutes"
+  ]
+}

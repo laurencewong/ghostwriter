@@ -1,0 +1,6 @@
+# Copy to fleet.local.sh (git-ignored) to configure this machine.
+# Point at an external boundary library (must contain escalate.base.sh), or leave unset to
+# use the bundled boundary-lite.sh:
+# export FLEET_LIB="$HOME/path/to/fleet/lib"
+# Book workspaces outside this repo that the agent may write to (colon-separated, absolute):
+# export GHOSTWRITER_EXTRA_ROOTS="$HOME/books/my-book"

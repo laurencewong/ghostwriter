@@ -1,0 +1,17 @@
+{
+  "title": "Borrowed: Why the Shared Shelf Beats the Garage",
+  "author": "Mara Quill (fictional)",
+  "thesis_file": "thesis.md",
+  "drafts_per_chapter": 3,
+  "voice": {
+    "samples": [
+      {
+        "path": "voice/samples/*.md",
+        "owner": "self",
+        "weight": 1.0,
+        "note": "the author's own published writing"
+      }
+    ]
+  },
+  "created": "2026-11-08"
+}

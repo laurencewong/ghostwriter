@@ -1,0 +1,11 @@
+{
+  "title": "Untitled book",
+  "author": "The Author",
+  "thesis_file": "thesis.md",
+  "drafts_per_chapter": 3,
+  "voice": {
+    "samples": [
+      {"path": "voice/samples/*.md", "owner": "self", "weight": 1.0, "note": "the author's own published writing"}
+    ]
+  }
+}

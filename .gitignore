@@ -1,0 +1,36 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Secrets and local data: never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+*.sqlite
+*.db
+
+# Ghost Writer: personal state never goes in the public history
+books/
+decisions-log.md
+journal/*
+!journal/.gitkeep
+escalations/*
+!escalations/README.md
+.claude/hooks/fleet.local.sh
+.claude/settings.local.json
