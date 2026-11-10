@@ -1450,26 +1450,41 @@ def declared_moments(fs: dict | None) -> set[str]:
     return {m.get("id") for m in (fs or {}).get("value_moments", []) if isinstance(m, dict)}
 
 
-def fund_silenced(a=None) -> bool:
+def fund_silenced(a=None, check_tty: bool = True) -> bool:
     if getattr(a, "quiet", False):
         return True
     if os.environ.get("GHOSTWRITER_NO_FUND", "").strip() not in ("", "0"):
         return True
     if any(os.environ.get(v, "").strip() not in ("", "0", "false") for v in CI_VARS):
         return True
+    if not check_tty:
+        return False
+    return not stdout_is_tty()
+
+
+def stdout_is_tty() -> bool:
     try:
-        return not sys.stdout.isatty()
+        return sys.stdout.isatty()
     except (AttributeError, ValueError):
-        return True
+        return False
 
 
-def fund_milestone(moment: str, key: str, prefix: str, a=None, now: datetime | None = None,
-                   fs: dict | None = None, words: int | None = None) -> str | None:
-    """Count a value moment and maybe print the one-line ask. Returns the line printed, or None.
-    words: prose words the author now holds at this moment (one chapter, or the whole draft)."""
-    if fund_silenced(a):
-        return None
-    fs = load_funding_status() if fs is None else fs
+# When an agent runs this CLI through Claude Code's Bash tool, stdout is not a terminal, so the line
+# stays silent: the model must never see (or repeat) an ask. Instead the CLI prints this neutral
+# marker, with no money in it. The OPT-IN hook scripts/fund_line_hook.py reads it and shows the
+# line to the user as a Claude Code systemMessage, under the same caps and the same state file.
+VALUE_MOMENT_MARKER = "[value moment]"
+
+
+def value_moment_marker(moment: str, tag_key: str, words: int | None, prefix: str) -> str:
+    return f"{VALUE_MOMENT_MARKER} {moment} key={tag_key} words={int(words or 0)} | {prefix}"
+
+
+def fund_count(moment: str, tag_key: str, prefix: str, fs: dict | None, now: datetime | None = None,
+               words: int | None = None) -> str | None:
+    """Count one value moment in the shared state and return the line if one is due, else None.
+    Shared by the terminal path (fund_milestone) and the opt-in hook, so both obey one set of caps.
+    tag_key: a hash of the outcome (never a path). Does not print."""
     if fs is not None and moment not in declared_moments(fs):
         return None  # only at a moment the repo declared as the point the user got value
     if fund_covered(fs):
@@ -1478,7 +1493,7 @@ def fund_milestone(moment: str, key: str, prefix: str, a=None, now: datetime | N
     if st.get("off"):
         return None
     seen = st.get("seen", [])
-    tag = f"{moment}:{hashlib.sha256(key.encode()).hexdigest()[:16]}"  # no book paths in the state file
+    tag = f"{moment}:{tag_key}"
     if tag in seen:
         return None  # each chapter's first pass counts once
     st["seen"] = (seen + [tag])[-500:]
@@ -1499,8 +1514,28 @@ def fund_milestone(moment: str, key: str, prefix: str, a=None, now: datetime | N
     if due:
         line = f"{prefix}{value_clause(est)} {fund_line(fs)}"
         st["last_ask"], st["since_ask"], st["asks"] = now.isoformat(), 0, int(st.get("asks", 0)) + 1
-        print(f"\n{line}")
     save_fund_state(st)
+    return line
+
+
+def fund_milestone(moment: str, key: str, prefix: str, a=None, now: datetime | None = None,
+                   fs: dict | None = None, words: int | None = None) -> str | None:
+    """Count a value moment and maybe print the one-line ask. Returns the line printed, or None.
+    words: prose words the author now holds at this moment (one chapter, or the whole draft).
+    Not a terminal: print only the neutral value-moment marker (for the opt-in hook), count nothing."""
+    if fund_silenced(a, check_tty=False):
+        return None
+    fs = load_funding_status() if fs is None else fs
+    tag_key = hashlib.sha256(key.encode()).hexdigest()[:16]  # no book paths in the state file
+    if not stdout_is_tty():
+        st = load_fund_state()
+        if ((fs is None or moment in declared_moments(fs)) and not fund_covered(fs) and not st.get("off")
+                and f"{moment}:{tag_key}" not in st.get("seen", [])):
+            print(f"\n{value_moment_marker(moment, tag_key, words, prefix)}")
+        return None
+    line = fund_count(moment, tag_key, prefix, fs, now=now, words=words)
+    if line:
+        print(f"\n{line}")
     return line
 
 

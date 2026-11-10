@@ -12,19 +12,31 @@
       "id": "research-ready",
       "surface": "cli",
       "when": "the book leaves the research phase with every exit criterion met (`phase advance` research -> synthesis, no override)",
-      "why": "A finished research phase (the author's own exit criteria ticked, coverage at the threshold, every citation with an honest status) is the first thing the author holds that they could not get from a chatbot: a defensible research base for the book."
+      "why": "A finished research phase (the author's own exit criteria ticked, coverage at the threshold, every citation with an honest status) is the first thing the author holds that they could not get from a chatbot: a defensible research base for the book.",
+      "hook_match": {
+        "command": "ghostwriter\\.py",
+        "output": "^\\[value moment\\] research-ready key=(?P<key>[0-9a-f]{16}) words=(?P<words>\\d+) \\| (?P<prefix>.+)$"
+      }
     },
     {
       "id": "chapter-passed",
       "surface": "cli",
       "when": "the first time a chapter draft passes all 3 checks (tournament or promote)",
-      "why": "A chapter that is sourced, sounds like the author and survives its strongest objection is the first finished piece of the book the author is holding."
+      "why": "A chapter that is sourced, sounds like the author and survives its strongest objection is the first finished piece of the book the author is holding.",
+      "hook_match": {
+        "command": "ghostwriter\\.py",
+        "output": "^\\[value moment\\] chapter-passed key=(?P<key>[0-9a-f]{16}) words=(?P<words>\\d+) \\| (?P<prefix>.+)$"
+      }
     },
     {
       "id": "full-draft",
       "surface": "cli",
       "when": "every chapter in the spine has been promoted",
-      "why": "A complete, gate-passing draft of the whole book is the full payoff the author came for."
+      "why": "A complete, gate-passing draft of the whole book is the full payoff the author came for.",
+      "hook_match": {
+        "command": "ghostwriter\\.py",
+        "output": "^\\[value moment\\] full-draft key=(?P<key>[0-9a-f]{16}) words=(?P<words>\\d+) \\| (?P<prefix>.+)$"
+      }
     }
   ],
   "value_estimates": {
@@ -55,5 +67,6 @@
       "the research-ready moment makes no time claim at all"
     ],
     "task": "drafting"
-  }
+  },
+  "_about_hook": "hook_match is read by the OPT-IN Claude Code hook scripts/fund_line_hook.py: when an agent runs the CLI through the Bash tool (not a terminal), the CLI prints a neutral '[value moment]' marker with no money in it, and the hook shows the line to the user as a systemMessage, under the same caps and state."
 }

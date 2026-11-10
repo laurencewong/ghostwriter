@@ -9,7 +9,7 @@ It runs inside an AI coding agent (built for Claude Code). The judgment steps ar
 Needs Python 3.9+, `jq` (for the boundary hook), and Claude Code or a similar agent. Setup takes about five minutes.
 
 ```sh
-git clone <this repo> ghostwriter && cd ghostwriter
+git clone https://github.com/laurencewong/ghostwriter.git && cd ghostwriter
 python3 scripts/ghostwriter.py init books/my-book --title "Working title" --author "Your Name"
 # put a few of your own published pieces in books/my-book/voice/samples/
 python3 scripts/ghostwriter.py voice-build books/my-book
@@ -105,12 +105,44 @@ Chapter 3 passed all 3 checks ✓. That's about 3 hours of drafting you didn't d
 - **The "hours" figure is an estimate, and a low one.** Words in the passing chapter ÷ a published composing-speed benchmark (19 words a minute, Karat et al. 1999), and only half of that is claimed, rounded down. Under 10 minutes, the line makes no value claim. The research moment makes no time claim at all, because there is no research-time benchmark we would trust; it names the outcome only. The assumptions sit in `FUNDING-STATUS.json` under `value_estimates`; `python3 scripts/ghostwriter.py fund` prints the math and the source.
 - **How often:** the first of those moments, then about every 10th, and never more than once a week.
 - **Never from the model.** The prompts and charter never mention money (a test checks). Only the script prints the line.
-- **Silent** when output is piped or not a terminal, in CI, with `GHOSTWRITER_NO_FUND=1` or `--quiet`, after `python3 scripts/ghostwriter.py fund --off`, and for good once the build cost is covered.
+- **Silent** when output is piped or not a terminal (a neutral marker prints instead; see the opt-in hook below), in CI, with `GHOSTWRITER_NO_FUND=1` or `--quiet`, after `python3 scripts/ghostwriter.py fund --off`, and for good once the build cost is covered.
 - `python3 scripts/ghostwriter.py fund` shows the cost, what sponsors have covered, the link and the estimate's math, any time. State lives in `~/.config/ghostwriter/fund.json` (honors `XDG_CONFIG_HOME`) and never leaves your machine.
+
+### Optional: show the line inside Claude Code (opt-in hook)
+
+When your agent runs the CLI through Claude Code's Bash tool, the output is not a terminal, so the line above stays silent: the model never sees an ask and never repeats one. At a value moment the CLI prints a neutral marker instead, with no money in it:
+
+```
+[value moment] chapter-passed key=3f1c... words=2412 | Chapter 3 passed all 3 checks ✓.
+```
+
+If you want the line to reach you there too, turn on the hook `scripts/fund_line_hook.py`. It runs after each Bash call, spots that marker in `ghostwriter.py` output, and shows the line to **you** as a Claude Code `systemMessage`, which is not handed to the model as an instruction. It is **off by default**: nothing installs it, and this repo's own `.claude/settings.json` does not enable it. To turn it on, add this to `.claude/settings.local.json` in your clone (personal and git-ignored; Claude Code merges it with the repo's boundary hooks) or to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/fund_line_hook.py\"" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The hook uses the CLI's own state file and rules, so one set of caps covers both: the moments declared in `FUNDING-STATUS.json` (each has a `hook_match`), the first one then about every 10th, never more than once a week, each outcome counted once. It is silent in CI, with `GHOSTWRITER_NO_FUND=1`, after `python3 scripts/ghostwriter.py fund --off` (one switch for both), and for good once the build cost is covered. Any error, and it exits quietly; it never blocks a tool call. To turn it off again, delete the snippet.
 
 ## License
 
-Not chosen yet. See [LICENSE](LICENSE). Until it is, no license is granted.
+Two licenses, split by what the file is:
+
+- **Code: [MIT](LICENSE).** `scripts/`, `tests/`, `.claude/hooks/` and `.claude/settings.json`.
+- **Content: [CC BY 4.0](LICENSE-CONTENT).** `prompts/`, the docs (`README.md`, `AGENT.md`, `CLAUDE.md`, `PRFAQ.md` and other Markdown), `book-template/`, `examples/` and `data/`. Use and adapt them for anything, commercial included; credit "Ghost Writer by Laurence Wong" with a link to this repo, and say if you changed them.
+
+Books you write with Ghost Writer are yours. Neither license reaches your own book workspace.
 
 ---
 <sub>Built with Claude Code (~12M Claude tokens so far; see `FUNDING-STATUS.json`). If it saved you time, you can help cover the tokens: [Sponsor](https://github.com/sponsors/laurencewong).</sub>

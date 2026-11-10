@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0 (2026-11-10): public release
+- **Licensed:** MIT for the code (`scripts/`, `tests/`, `.claude/hooks/`, `.claude/settings.json`) in
+  `LICENSE`; CC BY 4.0 for the prompts, docs, book template, examples and data in `LICENSE-CONTENT`.
+  The README states the split.
+- **Opt-in Claude Code hook for the support line** (`scripts/fund_line_hook.py`). When an agent runs
+  the CLI through the Bash tool (not a terminal), the CLI now prints a neutral
+  `[value moment] <id> key=<hash> words=<n> | <outcome>` marker, with no money in it, instead of
+  nothing. The hook spots it and shows the line to the user as a `systemMessage`; the model never
+  says it. Same caps, opt-outs, CI silence and covered-goal stop as the CLI, sharing its state file
+  (`fund --off` turns off both). Each value moment in `FUNDING-STATUS.json` carries a `hook_match`.
+  Off by default and not enabled in this repo's `.claude/settings.json`; the README has the snippet.
+- `fund_count` is the one counter both surfaces use. 108 tests.
+- Graded against the shared-repo standard v1.2.0 (`.repo-evals.json`).
+
 ## 0.3.0 (unreleased)
 Lessons from the first real run with an author. The agent jumped to a thesis pick and chapter
 spines on day one; the author said "we are in the research phase, not the writing phase".

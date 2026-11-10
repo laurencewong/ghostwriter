@@ -36,7 +36,7 @@
 4. **Boundary check.** Tracked files contain no personal data, secrets, employer content, partner names, or family. The demo is fictional and labeled so in every source. The maintainer's real book lives in a separate private directory that is never part of this repo. Scan run 2026-11-08: clean (see the build notes).
 5. **Maintenance.** We will fix bugs in the gates and keep the prompts current. We do not promise support for other agents, other languages, or feature requests.
 6. **Success at 30/90 days.** 30 days: 50 stars and 3 outside users who report a gated chapter (issue or post). 90 days: 150 stars, 10 forks, and the maintainer's own book with 3 chapters through every gate.
-7. **Risks.** Legal: the no-imitation rule and short-quote rule reduce copyright exposure; license not yet chosen. Trust: a tool named "ghost writer" invites the concern that it hides AI use, so the README states the AI-tell gate is for quality and disclosure is the author's call. Support burden: low, the code is small and has no dependencies.
+7. **Risks.** Legal: the no-imitation rule and short-quote rule reduce copyright exposure; code is MIT and prompts/docs are CC BY 4.0. Trust: a tool named "ghost writer" invites the concern that it hides AI use, so the README states the AI-tell gate is for quality and disclosure is the author's call. Support burden: low, the code is small and has no dependencies.
 8. **Kill or keep.** At 90 days, under 25 stars and no outside user reporting a chapter: archive it and keep using it privately.
 9. **Tokens and "cover the tokens".** Build token count goes in the ledger before publish; the README footer carries the count and a Sponsor link. Optional, never paywalled; the code stays free.
 

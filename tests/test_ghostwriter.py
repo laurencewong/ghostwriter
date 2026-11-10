@@ -966,6 +966,124 @@ class TestFundSilence(FundTestCase):
         self.assertIn("~$412 in AI, $37 covered. Chip in $3: https://github.com/sponsors/laurencewong", out)
 
 
+import fund_line_hook as hook  # noqa: E402
+
+HOOK_STATUS = json.loads(json.dumps(STATUS))
+for _m in HOOK_STATUS["value_moments"]:
+    _m["hook_match"] = {"command": r"ghostwriter\.py",
+                        "output": r"^\[value moment\] " + _m["id"]
+                        + r" key=(?P<key>[0-9a-f]{16}) words=(?P<words>\d+) \| (?P<prefix>.+)$"}
+
+
+class TestFundHook(FundTestCase):
+    """The opt-in Claude Code hook: the CLI prints a neutral marker when not a terminal; the hook shows
+    the line to the USER as a systemMessage, under the same caps, opt-outs and state as the CLI."""
+
+    def setUp(self):
+        super().setUp()
+        self.status_file.write_text(json.dumps(HOOK_STATUS))
+
+    def marker(self, key, moment="chapter-passed", words=None):
+        line, out = self.moment(key, moment=moment, tty=False, words=words)
+        self.assertIsNone(line)
+        return out
+
+    def event(self, out, cmd="python3 scripts/ghostwriter.py promote books/b ch03 run-1"):
+        return {"tool_name": "Bash", "tool_input": {"command": cmd},
+                "tool_response": {"stdout": out, "stderr": ""}}
+
+    def run_hook(self, event):
+        out = io.StringIO()
+        with mock.patch.object(sys, "stdin", io.StringIO(json.dumps(event))), contextlib.redirect_stdout(out):
+            self.assertEqual(hook.main([]), 0)
+        return out.getvalue()
+
+    def test_not_a_terminal_prints_a_neutral_marker_and_no_money(self):
+        out = self.marker("ch03", words=6840)
+        self.assertIn("[value moment] chapter-passed key=", out)
+        self.assertIn("words=6840 | Chapter 3 passed all 3 checks ✓.", out)
+        self.assertIsNone(re.search(r"(?i)sponsor|chip in|\$", out))
+        self.assertEqual(self.state(), {})            # the CLI counts nothing on this path
+
+    def test_hook_shows_the_exact_cli_line_as_a_system_message(self):
+        printed = self.run_hook(self.event(self.marker("ch03", words=6840)))
+        msg = json.loads(printed)["systemMessage"]
+        self.assertEqual(msg, "Chapter 3 passed all 3 checks ✓. That's about 3 hours of drafting you didn't do "
+                              "(estimate: `ghostwriter.py fund`). Ghost Writer is free; building it cost ~$412 "
+                              "in AI, $37 covered. Chip in $3: https://github.com/sponsors/laurencewong")
+        self.assertEqual(self.state()["asks"], 1)
+
+    def test_hook_and_cli_share_one_set_of_caps(self):
+        self.assertIsNotNone(hook.handle(self.event(self.marker("k0")), now=T0))
+        for i in range(1, 10):
+            self.assertIsNone(hook.handle(self.event(self.marker(f"k{i}")), now=T0 + timedelta(days=30)))
+        self.assertIsNotNone(hook.handle(self.event(self.marker("k10")), now=T0 + timedelta(days=30)))
+        self.assertIsNone(hook.handle(self.event(self.marker("k11")), now=T0 + timedelta(days=31)))
+        self.assertIsNone(self.moment("k12", now=T0 + timedelta(days=32))[0])   # terminal: within 7 days
+        self.assertEqual(self.state()["asks"], 2)
+
+    def test_an_outcome_counts_once_and_the_marker_stops(self):
+        out = self.marker("ch01")
+        self.assertIsNotNone(hook.handle(self.event(out)))
+        self.assertIsNone(hook.handle(self.event(out)))
+        self.assertEqual(self.state()["moments"], 1)
+        self.assertNotIn("[value moment]", self.marker("ch01"))   # already counted: no marker either
+
+    def test_only_ghostwriter_commands_and_declared_moments(self):
+        out = self.marker("ch01")
+        self.assertIsNone(hook.handle(self.event(out, cmd="cat notes.txt")))
+        self.assertIsNone(hook.handle(self.event(out.replace("chapter-passed", "sources-added"))))
+        self.assertIsNone(hook.handle({"tool_name": "Bash", "tool_input": {"command": "ls"},
+                                       "tool_response": {"stdout": "ok"}}))
+        self.assertEqual(self.state(), {})
+
+    def test_silent_in_ci_with_env_opt_out_and_after_off(self):
+        out = self.marker("ch01")
+        for env in ({"CI": "true"}, {"GITHUB_ACTIONS": "true"}, {"GHOSTWRITER_NO_FUND": "1"}):
+            with mock.patch.dict(os.environ, env):
+                self.assertEqual(self.run_hook(self.event(out)), "")
+        with contextlib.redirect_stdout(io.StringIO()):
+            hook.main(["--off"])
+        self.assertEqual(self.run_hook(self.event(out)), "")
+        self.assertEqual(self.cli("fund")[1].count("occasional line: off"), 1)   # one switch for both
+        self.assertEqual(self.marker("ch02"), "")                                  # and no marker when off
+
+    def test_stops_once_the_goal_is_covered(self):
+        out = self.marker("ch01")
+        self.status_file.write_text(json.dumps(dict(HOOK_STATUS, raised_usd=412.5)))
+        self.assertEqual(self.run_hook(self.event(out)), "")
+        self.assertEqual(self.marker("ch02"), "")
+
+    def test_research_moment_makes_no_hours_claim(self):
+        out = self.marker("b", moment="research-ready")
+        self.assertEqual(out, "")                       # not declared in this status file
+        fs = json.loads((ROOT / "FUNDING-STATUS.json").read_text())
+        self.status_file.write_text(json.dumps(fs))
+        with mock.patch.object(gw, "fund_line", lambda f: "LINE"):
+            line, out = self.moment("b", moment="research-ready", tty=False)
+            msg = hook.handle(self.event(out))
+        self.assertTrue(msg.startswith("Chapter 3 passed all 3 checks ✓. LINE"))
+        self.assertNotIn("That's", msg)
+
+    def test_bad_input_never_breaks_the_tool_call(self):
+        with mock.patch.object(sys, "stdin", io.StringIO("not json")):
+            self.assertEqual(hook.main([]), 0)
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "fund_line_hook.py")], input="{}",
+                           capture_output=True, text=True, env={**os.environ, "XDG_CONFIG_HOME": str(self.tmp)})
+        self.assertEqual((r.returncode, r.stdout), (0, ""))
+
+    def test_repo_moments_all_have_a_hook_match_for_the_cli_marker(self):
+        fs = json.loads((ROOT / "FUNDING-STATUS.json").read_text())
+        for m in fs["value_moments"]:
+            marker = gw.value_moment_marker(m["id"], "0123456789abcdef", 10, "Done.")
+            self.assertRegex(marker, re.compile(m["hook_match"]["output"], re.M))
+            self.assertRegex("python3 scripts/ghostwriter.py promote b ch01 run-1", m["hook_match"]["command"])
+
+    def test_hook_is_not_enabled_by_default(self):
+        settings = (ROOT / ".claude" / "settings.json").read_text()
+        self.assertNotIn("fund_line_hook", settings)
+
+
 class TestNoAskFromTheModel(unittest.TestCase):
     """Only the CLI ever mentions money. The prompts and charter files the model reads never do."""
     PATTERN = re.compile(r"sponsor|donat|chip in", re.I)
